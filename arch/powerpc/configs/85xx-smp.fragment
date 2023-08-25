@@ -1,3 +1,2 @@
-# Enable SMP on 85xx
 CONFIG_NR_CPUS=24
 CONFIG_SMP=y

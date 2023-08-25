@@ -1,4 +1,3 @@
-# Non-hardware options common to 85xx and corenet
 CONFIG_ADFS_FS=m
 CONFIG_AFFS_FS=m
 CONFIG_AUDIT=y

@@ -1,4 +1,3 @@
-# Base hardware support for 86xx
 CONFIG_ATA=y
 CONFIG_BLK_DEV_SD=y
 CONFIG_BLK_DEV_SR=y

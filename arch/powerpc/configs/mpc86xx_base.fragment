@@ -1,4 +1,3 @@
-# Base mpc86xx support
 CONFIG_PPC_86xx=y
 CONFIG_GEF_PPC9A=y
 CONFIG_GEF_SBC310=y

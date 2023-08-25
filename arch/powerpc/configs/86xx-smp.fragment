@@ -1,3 +1,2 @@
-# Enable SMP on 86xx
 CONFIG_NR_CPUS=2
 CONFIG_SMP=y

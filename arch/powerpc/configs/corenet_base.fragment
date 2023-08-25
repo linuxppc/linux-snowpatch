@@ -1,3 +1,2 @@
-# Base support for corenet
 CONFIG_CORENET_GENERIC=y
 CONFIG_PPC_QEMU_E500=y
