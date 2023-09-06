@@ -1681,6 +1681,7 @@ noinstr struct pseries_errorlog *get_pseries_errorlog(struct rtas_error_log *log
 	return NULL;
 }
 
+#ifdef PPC_RTAS_SYSCALL
 /*
  * The sys_rtas syscall, as originally designed, allows root to pass
  * arbitrary physical addresses to RTAS calls. A number of RTAS calls
@@ -1890,6 +1891,7 @@ SYSCALL_DEFINE1(rtas, struct rtas_args __user *, uargs)
 
 	return 0;
 }
+#endif
 
 static void __init rtas_function_table_init(void)
 {
