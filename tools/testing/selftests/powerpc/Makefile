@@ -17,6 +17,7 @@ SUB_DIRS = alignment		\
 	   benchmarks		\
 	   cache_shape		\
 	   copyloops		\
+	   cpuidle_latency	\
 	   dexcr		\
 	   dscr			\
 	   mm			\
