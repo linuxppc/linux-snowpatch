@@ -189,7 +189,8 @@ static inline __no_kcsan void replay_soft_interrupts_irqrestore(void)
 	 * and re-locking AMR but we shouldn't get here in the first place,
 	 * hence the warning.
 	 */
-	kuap_assert_locked();
+	if (!IS_ENABLED(CONFIG_KCSAN))
+		kuap_assert_locked();
 
 	if (kuap_state != AMR_KUAP_BLOCKED)
 		set_kuap(AMR_KUAP_BLOCKED);

@@ -150,7 +150,7 @@ static inline void booke_restore_dbcr0(void)
 #endif
 }
 
-static inline void interrupt_enter_prepare(struct pt_regs *regs)
+static __always_inline void interrupt_enter_prepare(struct pt_regs *regs)
 {
 #ifdef CONFIG_PPC64
 	irq_soft_mask_set(IRQS_ALL_DISABLED);
@@ -215,11 +215,11 @@ static inline void interrupt_enter_prepare(struct pt_regs *regs)
  * However interrupt_nmi_exit_prepare does return directly to regs, because
  * NMIs do not do "exit work" or replay soft-masked interrupts.
  */
-static inline void interrupt_exit_prepare(struct pt_regs *regs)
+static __always_inline void interrupt_exit_prepare(struct pt_regs *regs)
 {
 }
 
-static inline void interrupt_async_enter_prepare(struct pt_regs *regs)
+static __always_inline void interrupt_async_enter_prepare(struct pt_regs *regs)
 {
 #ifdef CONFIG_PPC64
 	/* Ensure interrupt_enter_prepare does not enable MSR[EE] */
@@ -238,7 +238,7 @@ static inline void interrupt_async_enter_prepare(struct pt_regs *regs)
 	irq_enter();
 }
 
-static inline void interrupt_async_exit_prepare(struct pt_regs *regs)
+static __always_inline void interrupt_async_exit_prepare(struct pt_regs *regs)
 {
 	/*
 	 * Adjust at exit so the main handler sees the true NIA. This must
@@ -278,7 +278,7 @@ static inline bool nmi_disables_ftrace(struct pt_regs *regs)
 	return true;
 }
 
-static inline void interrupt_nmi_enter_prepare(struct pt_regs *regs, struct interrupt_nmi_state *state)
+static __always_inline void interrupt_nmi_enter_prepare(struct pt_regs *regs, struct interrupt_nmi_state *state)
 {
 #ifdef CONFIG_PPC64
 	state->irq_soft_mask = local_paca->irq_soft_mask;
@@ -340,7 +340,7 @@ static inline void interrupt_nmi_enter_prepare(struct pt_regs *regs, struct inte
 	nmi_enter();
 }
 
-static inline void interrupt_nmi_exit_prepare(struct pt_regs *regs, struct interrupt_nmi_state *state)
+static __always_inline void interrupt_nmi_exit_prepare(struct pt_regs *regs, struct interrupt_nmi_state *state)
 {
 	if (mfmsr() & MSR_DR) {
 		// nmi_exit if relocations are on
