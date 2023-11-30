@@ -180,29 +180,11 @@ static inline void pte_frag_set(mm_context_t *ctx, void *p)
 }
 #endif
 
-#ifndef pmd_is_leaf
-#define pmd_is_leaf pmd_is_leaf
-static inline bool pmd_is_leaf(pmd_t pmd)
+#define p4d_leaf p4d_leaf
+static inline bool p4d_leaf(p4d_t p4d)
 {
 	return false;
 }
-#endif
-
-#ifndef pud_is_leaf
-#define pud_is_leaf pud_is_leaf
-static inline bool pud_is_leaf(pud_t pud)
-{
-	return false;
-}
-#endif
-
-#ifndef p4d_is_leaf
-#define p4d_is_leaf p4d_is_leaf
-static inline bool p4d_is_leaf(p4d_t p4d)
-{
-	return false;
-}
-#endif
 
 #define pmd_pgtable pmd_pgtable
 static inline pgtable_t pmd_pgtable(pmd_t pmd)
@@ -236,6 +218,52 @@ static inline bool arch_supports_memmap_on_memory(unsigned long vmemmap_size)
 }
 
 #endif /* CONFIG_PPC64 */
+
+/*
+ * Currently only consumed by page_table_check_pud_{set,clear}. Since clears
+ * and sets to page table entries at any level are done through
+ * page_table_check_pte_{set,clear}, provide stub implementation.
+ */
+#ifndef pud_pfn
+#define pud_pfn pud_pfn
+static inline int pud_pfn(pud_t pud)
+{
+	WARN_ONCE(1, "pud: platform does not use pud entries directly");
+	return 0;
+}
+#endif
+
+#ifndef pmd_pte
+#define pmd_pte pmd_pte
+static inline pte_t pmd_pte(pmd_t pmd)
+{
+	WARN_ONCE(1, "pmd: platform does not use pmd entries directly");
+	return __pte(pmd_val(pmd));
+}
+#endif
+
+#ifndef pud_pte
+#define pud_pte pud_pte
+static inline pte_t pud_pte(pud_t pud)
+{
+	WARN_ONCE(1, "pud: platform does not use pud entries directly");
+	return __pte(pud_val(pud));
+}
+#endif
+
+static inline bool pmd_user_accessible_page(pmd_t pmd)
+{
+	pte_t pte = pmd_pte(pmd);
+
+	return pte_user_accessible_page(pte);
+}
+
+static inline bool pud_user_accessible_page(pud_t pud)
+{
+	pte_t pte = pud_pte(pud);
+
+	return pte_user_accessible_page(pte);
+}
 
 #endif /* __ASSEMBLY__ */
 
