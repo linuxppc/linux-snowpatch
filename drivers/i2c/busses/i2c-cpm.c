@@ -634,7 +634,7 @@ static int cpm_i2c_probe(struct platform_device *ofdev)
 {
 	int result, len;
 	struct cpm_i2c *cpm;
-	const u32 *data;
+	const __be32 *data;
 
 	cpm = kzalloc(sizeof(struct cpm_i2c), GFP_KERNEL);
 	if (!cpm)
