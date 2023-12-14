@@ -14,6 +14,7 @@
 #include <linux/ctype.h>
 #include <linux/uaccess.h>
 #include <linux/of.h>
+#include <linux/kmsan-checks.h>
 #include <asm/nvram.h>
 #include <asm/rtas.h>
 #include <asm/machdep.h>
@@ -41,6 +42,7 @@ static ssize_t pSeries_nvram_read(char *buf, size_t count, loff_t *index)
 	int done;
 	unsigned long flags;
 	char *p = buf;
+	size_t l;
 
 
 	if (nvram_size == 0 || nvram_fetch == RTAS_UNKNOWN_SERVICE)
@@ -53,6 +55,7 @@ static ssize_t pSeries_nvram_read(char *buf, size_t count, loff_t *index)
 	if (i + count > nvram_size)
 		count = nvram_size - i;
 
+	l = count;
 	spin_lock_irqsave(&nvram_lock, flags);
 
 	for (; count != 0; count -= len) {
@@ -73,6 +76,7 @@ static ssize_t pSeries_nvram_read(char *buf, size_t count, loff_t *index)
 	}
 
 	spin_unlock_irqrestore(&nvram_lock, flags);
+	kmsan_unpoison_memory(buf, l);
 	
 	*index = i;
 	return p - buf;

@@ -4,7 +4,7 @@
 
 #ifdef __KERNEL__
 
-#ifndef CONFIG_KASAN
+#if !defined(CONFIG_KASAN) && !defined(CONFIG_KMSAN)
 #define __HAVE_ARCH_STRNCPY
 #define __HAVE_ARCH_STRNCMP
 #define __HAVE_ARCH_MEMCHR
@@ -56,8 +56,22 @@ void *__memmove(void *to, const void *from, __kernel_size_t n);
 #endif /* CONFIG_CC_HAS_KASAN_MEMINTRINSIC_PREFIX */
 #endif /* CONFIG_KASAN */
 
+#ifdef CONFIG_KMSAN
+
+void *__memset(void *s, int c, __kernel_size_t count);
+void *__memcpy(void *to, const void *from, __kernel_size_t n);
+void *__memmove(void *to, const void *from, __kernel_size_t n);
+
+#ifdef __SANITIZE_MEMORY__
+#include <linux/kmsan_string.h>
+#define memset __msan_memset
+#define memcpy __msan_memcpy
+#define memmove __msan_memmove
+#endif
+#endif /* CONFIG_KMSAN */
+
 #ifdef CONFIG_PPC64
-#ifndef CONFIG_KASAN
+#if !defined(CONFIG_KASAN) && !defined(CONFIG_KMSAN)
 #define __HAVE_ARCH_MEMSET32
 #define __HAVE_ARCH_MEMSET64
 

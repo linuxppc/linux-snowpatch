@@ -68,6 +68,7 @@
 
 #include <linux/context_tracking.h>
 #include <linux/hardirq.h>
+#include <linux/kmsan.h>
 #include <asm/cputime.h>
 #include <asm/firmware.h>
 #include <asm/ftrace.h>
@@ -170,6 +171,7 @@ static inline void interrupt_enter_prepare(struct pt_regs *regs)
 		__hard_RI_enable();
 	}
 	/* Enable MSR[RI] early, to support kernel SLB and hash faults */
+	kmsan_unpoison_entry_regs(regs);
 #endif
 
 	if (!arch_irq_disabled_regs(regs))

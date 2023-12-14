@@ -2,6 +2,7 @@
 
 KASAN_SANITIZE := n
 KCSAN_SANITIZE := n
+KMSAN_SANITIZE := n
 
 targets += trampoline_$(BITS).o purgatory.ro
 

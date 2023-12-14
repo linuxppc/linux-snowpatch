@@ -24,8 +24,9 @@
 
 #include <asm/paca.h>
 
-void __no_sanitize_address arch_stack_walk(stack_trace_consume_fn consume_entry, void *cookie,
-					   struct task_struct *task, struct pt_regs *regs)
+void __no_sanitize_address __no_kmsan_checks
+	arch_stack_walk(stack_trace_consume_fn consume_entry, void *cookie,
+			struct task_struct *task, struct pt_regs *regs)
 {
 	unsigned long sp;
 
@@ -62,8 +63,9 @@ void __no_sanitize_address arch_stack_walk(stack_trace_consume_fn consume_entry,
  *
  * If the task is not 'current', the caller *must* ensure the task is inactive.
  */
-int __no_sanitize_address arch_stack_walk_reliable(stack_trace_consume_fn consume_entry,
-						   void *cookie, struct task_struct *task)
+int __no_sanitize_address __no_kmsan_checks
+	arch_stack_walk_reliable(stack_trace_consume_fn consume_entry, void *cookie,
+				 struct task_struct *task)
 {
 	unsigned long sp;
 	unsigned long newsp;

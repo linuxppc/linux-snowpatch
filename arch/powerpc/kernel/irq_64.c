@@ -45,6 +45,7 @@
 #include <linux/vmalloc.h>
 #include <linux/pgtable.h>
 #include <linux/static_call.h>
+#include <linux/kmsan.h>
 
 #include <linux/uaccess.h>
 #include <asm/interrupt.h>
@@ -117,6 +118,7 @@ static __no_kcsan void __replay_soft_interrupts(void)
 	local_paca->irq_happened |= PACA_IRQ_REPLAYING;
 
 	ppc_save_regs(&regs);
+	kmsan_unpoison_entry_regs(&regs);
 	regs.softe = IRQS_ENABLED;
 	regs.msr |= MSR_EE;
 

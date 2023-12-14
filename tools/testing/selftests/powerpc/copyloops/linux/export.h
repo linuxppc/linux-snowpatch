@@ -2,3 +2,4 @@
 #define EXPORT_SYMBOL(x)
 #define EXPORT_SYMBOL_GPL(x)
 #define EXPORT_SYMBOL_KASAN(x)
+#define EXPORT_SYMBOL_KMSAN(x)

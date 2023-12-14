@@ -27,6 +27,7 @@
 #include <asm/sections.h>
 #include <asm/inst.h>
 #include <linux/uaccess.h>
+#include <linux/kmsan-checks.h>
 
 DEFINE_PER_CPU(struct kprobe *, current_kprobe) = NULL;
 DEFINE_PER_CPU(struct kprobe_ctlblk, kprobe_ctlblk);
@@ -179,6 +180,7 @@ int arch_prepare_kprobe(struct kprobe *p)
 
 	if (!ret) {
 		patch_instruction(p->ainsn.insn, insn);
+		kmsan_unpoison_memory(p->ainsn.insn, sizeof(kprobe_opcode_t));
 		p->opcode = ppc_inst_val(insn);
 	}
 

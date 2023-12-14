@@ -2276,9 +2276,9 @@ static bool empty_user_regs(struct pt_regs *regs, struct task_struct *tsk)
 
 static int kstack_depth_to_print = CONFIG_PRINT_STACK_DEPTH;
 
-void __no_sanitize_address show_stack(struct task_struct *tsk,
-				      unsigned long *stack,
-				      const char *loglvl)
+void __no_sanitize_address __no_kmsan_checks show_stack(struct task_struct *tsk,
+							unsigned long *stack,
+							const char *loglvl)
 {
 	unsigned long sp, ip, lr, newsp;
 	int count = 0;

@@ -9,8 +9,9 @@
 #include <asm/errno.h>
 #include <asm/ppc_asm.h>
 #include <asm/kasan.h>
+#include <asm/kmsan.h>
 
-#ifndef CONFIG_KASAN
+#if !defined(CONFIG_KASAN) && !defined(CONFIG_KMSAN)
 _GLOBAL(__memset16)
 	rlwimi	r4,r4,16,0,15
 	/* fall through */
@@ -96,6 +97,7 @@ _GLOBAL_KASAN(memset)
 	blr
 EXPORT_SYMBOL(memset)
 EXPORT_SYMBOL_KASAN(memset)
+EXPORT_SYMBOL_KMSAN(memset)
 
 _GLOBAL_TOC_KASAN(memmove)
 	cmplw	0,r3,r4
@@ -140,3 +142,4 @@ _GLOBAL(backwards_memcpy)
 	b	1b
 EXPORT_SYMBOL(memmove)
 EXPORT_SYMBOL_KASAN(memmove)
+EXPORT_SYMBOL_KMSAN(memmove)

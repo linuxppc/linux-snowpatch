@@ -107,7 +107,7 @@ __module_alloc(unsigned long size, unsigned long start, unsigned long end, bool 
 
 void *module_alloc(unsigned long size)
 {
-#ifdef MODULES_VADDR
+#if defined(MODULES_VADDR) && defined(CONFIG_PPC32)
 	unsigned long limit = (unsigned long)_etext - SZ_32M;
 	void *ptr = NULL;
 

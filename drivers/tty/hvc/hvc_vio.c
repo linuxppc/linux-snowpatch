@@ -227,7 +227,7 @@ static const struct hv_ops hvterm_hvsi_ops = {
 static void udbg_hvc_putc(char c)
 {
 	int count = -1;
-	unsigned char bounce_buffer[16];
+	unsigned char bounce_buffer[16] = { 0 };
 
 	if (!hvterm_privs[0])
 		return;

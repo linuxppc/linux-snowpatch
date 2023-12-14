@@ -8,6 +8,7 @@
 #include <asm/asm-compat.h>
 #include <asm/feature-fixups.h>
 #include <asm/kasan.h>
+#include <asm/kmsan.h>
 
 #ifndef SELFTEST_CASE
 /* For big-endian, 0 == most CPUs, 1 == POWER6, 2 == Cell */
@@ -228,3 +229,4 @@ END_FTR_SECTION_IFCLR(CPU_FTR_UNALIGNED_LD_STD)
 #endif
 EXPORT_SYMBOL(memcpy)
 EXPORT_SYMBOL_KASAN(memcpy)
+EXPORT_SYMBOL_KMSAN(memcpy)

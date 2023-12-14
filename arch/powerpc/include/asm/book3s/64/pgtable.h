@@ -249,7 +249,38 @@ enum pgtable_index {
 extern unsigned long __vmalloc_start;
 extern unsigned long __vmalloc_end;
 #define VMALLOC_START	__vmalloc_start
+
+#ifndef CONFIG_KMSAN
 #define VMALLOC_END	__vmalloc_end
+#else
+/*
+ * In KMSAN builds vmalloc area is four times smaller, and the remaining 3/4
+ * are used to keep the metadata for virtual pages. The memory formerly
+ * belonging to vmalloc area is now laid out as follows:
+ *
+ * 1st quarter: VMALLOC_START to VMALLOC_END - new vmalloc area
+ * 2nd quarter: KMSAN_VMALLOC_SHADOW_START to
+ *              KMSAN_VMALLOC_SHADOW_START+VMALLOC_LEN - vmalloc area shadow
+ * 3rd quarter: KMSAN_VMALLOC_ORIGIN_START to
+ *              KMSAN_VMALLOC_ORIGIN_START+VMALLOC_LEN - vmalloc area origins
+ * 4th quarter: unused
+ */
+#define VMALLOC_LEN ((__vmalloc_end - __vmalloc_start) >> 2)
+#define VMALLOC_END (VMALLOC_START + VMALLOC_LEN)
+
+#define KMSAN_VMALLOC_SHADOW_START VMALLOC_END
+#define KMSAN_VMALLOC_ORIGIN_START (VMALLOC_END + VMALLOC_LEN)
+
+/*
+ * Module metadata is stored in the corresponding vmalloc metadata regions
+ */
+#define KMSAN_MODULES_SHADOW_START	KMSAN_VMALLOC_SHADOW_START
+#define KMSAN_MODULES_ORIGIN_START	KMSAN_VMALLOC_ORIGIN_START
+#endif /* CONFIG_KMSAN */
+
+#define MODULES_VADDR VMALLOC_START
+#define MODULES_END VMALLOC_END
+#define MODULES_LEN		(MODULES_END - MODULES_VADDR)
 
 static inline unsigned int ioremap_max_order(void)
 {
@@ -264,7 +295,18 @@ extern unsigned long __kernel_io_start;
 extern unsigned long __kernel_io_end;
 #define KERN_VIRT_START __kernel_virt_start
 #define KERN_IO_START  __kernel_io_start
+#ifndef CONFIG_KMSAN
 #define KERN_IO_END __kernel_io_end
+#else
+/*
+ * In KMSAN builds IO space is 4 times smaller, the remaining space is used to
+ * store metadata. See comment for vmalloc regions above.
+ */
+#define KERN_IO_LEN             ((__kernel_io_end - __kernel_io_start) >> 2)
+#define KERN_IO_END             (KERN_IO_START + KERN_IO_LEN)
+#define KERN_IO_SHADOW_START    KERN_IO_END
+#define KERN_IO_ORIGIN_START    (KERN_IO_SHADOW_START + KERN_IO_LEN)
+#endif /* !CONFIG_KMSAN */
 
 extern struct page *vmemmap;
 extern unsigned long pci_io_base;

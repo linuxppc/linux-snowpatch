@@ -13,6 +13,7 @@
 #include <linux/kernel.h>
 #include <linux/export.h>
 #include <linux/errno.h>
+#include <linux/kmsan-checks.h>
 #include <asm/hvcall.h>
 #include <asm/hvconsole.h>
 #include <asm/plpar_wrappers.h>
@@ -32,6 +33,7 @@ int hvc_get_chars(uint32_t vtermno, char *buf, int count)
 	unsigned long *lbuf = (unsigned long *)buf;
 
 	ret = plpar_hcall(H_GET_TERM_CHAR, retbuf, vtermno);
+	kmsan_unpoison_memory(retbuf, sizeof(retbuf));
 	lbuf[0] = be64_to_cpu(retbuf[1]);
 	lbuf[1] = be64_to_cpu(retbuf[2]);
 

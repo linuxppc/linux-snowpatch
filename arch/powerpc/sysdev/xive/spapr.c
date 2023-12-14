@@ -20,6 +20,7 @@
 #include <linux/mm.h>
 #include <linux/delay.h>
 #include <linux/libfdt.h>
+#include <linux/kmsan-checks.h>
 
 #include <asm/machdep.h>
 #include <asm/prom.h>
@@ -190,6 +191,8 @@ static long plpar_int_get_source_info(unsigned long flags,
 		pr_err("H_INT_GET_SOURCE_INFO lisn=0x%lx failed %ld\n", lisn, rc);
 		return rc;
 	}
+
+	kmsan_unpoison_memory(retbuf, sizeof(retbuf));
 
 	*src_flags = retbuf[0];
 	*eoi_page  = retbuf[1];

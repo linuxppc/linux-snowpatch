@@ -32,8 +32,10 @@ obj-y += code-patching.o feature-fixups.o pmem.o
 obj-$(CONFIG_CODE_PATCHING_SELFTEST) += test-code-patching.o
 
 ifndef CONFIG_KASAN
+ifndef CONFIG_KMSAN
 obj-y	+=	string.o memcmp_$(BITS).o
 obj-$(CONFIG_PPC32)	+= strlen_32.o
+endif
 endif
 
 obj-$(CONFIG_PPC32)	+= div64.o copy_32.o crtsavres.o
