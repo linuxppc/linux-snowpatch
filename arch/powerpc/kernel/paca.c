@@ -236,15 +236,18 @@ void setup_paca(struct paca_struct *new_paca)
 
 }
 
-static int __initdata paca_nr_cpu_ids;
+int __initdata paca_last_cpu_num;
 static int __initdata paca_ptrs_size;
 static int __initdata paca_struct_size;
 
 void __init allocate_paca_ptrs(void)
 {
-	paca_nr_cpu_ids = nr_cpu_ids;
+	unsigned int cnt;
 
-	paca_ptrs_size = sizeof(struct paca_struct *) * nr_cpu_ids;
+	/* paca_ptrs should be big enough to hold boot cpu */
+	cnt = max((unsigned int)ALIGN(boot_cpuid + 1, threads_in_core), nr_cpu_ids);
+	paca_last_cpu_num = cnt;
+	paca_ptrs_size = sizeof(struct paca_struct *) * cnt;
 	paca_ptrs = memblock_alloc_raw(paca_ptrs_size, SMP_CACHE_BYTES);
 	if (!paca_ptrs)
 		panic("Failed to allocate %d bytes for paca pointers\n",
@@ -258,7 +261,7 @@ void __init allocate_paca(int cpu)
 	u64 limit;
 	struct paca_struct *paca;
 
-	BUG_ON(cpu >= paca_nr_cpu_ids);
+	BUG_ON(cpu >= paca_last_cpu_num);
 
 #ifdef CONFIG_PPC_BOOK3S_64
 	/*
@@ -286,16 +289,6 @@ void __init allocate_paca(int cpu)
 
 void __init free_unused_pacas(void)
 {
-	int new_ptrs_size;
-
-	new_ptrs_size = sizeof(struct paca_struct *) * nr_cpu_ids;
-	if (new_ptrs_size < paca_ptrs_size)
-		memblock_phys_free(__pa(paca_ptrs) + new_ptrs_size,
-				   paca_ptrs_size - new_ptrs_size);
-
-	paca_nr_cpu_ids = nr_cpu_ids;
-	paca_ptrs_size = new_ptrs_size;
-
 #ifdef CONFIG_PPC_64S_HASH_MMU
 	if (early_radix_enabled()) {
 		/* Ugly fixup, see new_slb_shadow() */
@@ -304,9 +297,6 @@ void __init free_unused_pacas(void)
 		paca_ptrs[boot_cpuid]->slb_shadow_ptr = NULL;
 	}
 #endif
-
-	printk(KERN_DEBUG "Allocated %u bytes for %u pacas\n",
-			paca_ptrs_size + paca_struct_size, nr_cpu_ids);
 }
 
 #ifdef CONFIG_PPC_64S_HASH_MMU
