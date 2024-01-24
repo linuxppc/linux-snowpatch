@@ -789,3 +789,8 @@ long __machine_check_early_realmode_p10(struct pt_regs *regs)
 	return mce_handle_error(regs, srr1,
 			mce_p10_derror_table, mce_p10_ierror_table);
 }
+
+long __machine_check_early_realmode_p11(struct pt_regs *regs)
+{
+	return __machine_check_early_realmode_p10(regs);
+}

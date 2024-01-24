@@ -286,3 +286,13 @@ void __restore_cpu_power10(void)
 	init_HFSCR();
 	init_PMU_HV();
 }
+
+void __setup_cpu_power11(unsigned long offset, struct cpu_spec *t)
+{
+	return __setup_cpu_power10(offset, t);
+}
+
+void __restore_cpu_power11(void)
+{
+	return __restore_cpu_power10();
+}
