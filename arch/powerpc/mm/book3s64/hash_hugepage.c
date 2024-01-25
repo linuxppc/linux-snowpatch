@@ -59,16 +59,6 @@ int __hash_page_thp(unsigned long ea, unsigned long access, unsigned long vsid,
 
 	rflags = htab_convert_pte_flags(new_pmd, flags);
 
-#if 0
-	if (!cpu_has_feature(CPU_FTR_COHERENT_ICACHE)) {
-
-		/*
-		 * No CPU has hugepages but lacks no execute, so we
-		 * don't need to worry about that case
-		 */
-		rflags = hash_page_do_lazy_icache(rflags, __pte(old_pte), trap);
-	}
-#endif
 	/*
 	 * Find the slot index details for this ea, using base page size.
 	 */
