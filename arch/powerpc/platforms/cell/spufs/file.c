@@ -1705,19 +1705,7 @@ static int spufs_mfc_flush(struct file *file, fl_owner_t id)
 	ret = spu_acquire(ctx);
 	if (ret)
 		goto out;
-#if 0
-/* this currently hangs */
-	ret = spufs_wait(ctx->mfc_wq,
-			 ctx->ops->set_mfc_query(ctx, ctx->tagwait, 2));
-	if (ret)
-		goto out;
-	ret = spufs_wait(ctx->mfc_wq,
-			 ctx->ops->read_mfc_tagstatus(ctx) == ctx->tagwait);
-	if (ret)
-		goto out;
-#else
 	ret = 0;
-#endif
 	spu_release(ctx);
 out:
 	return ret;
