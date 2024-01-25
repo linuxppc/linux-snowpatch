@@ -731,26 +731,6 @@ struct hash_mm_context {
 #endif /* CONFIG_PPC_SUBPAGE_PROT */
 };
 
-#if 0
-/*
- * The code below is equivalent to this function for arguments
- * < 2^VSID_BITS, which is all this should ever be called
- * with.  However gcc is not clever enough to compute the
- * modulus (2^n-1) without a second multiply.
- */
-#define vsid_scramble(protovsid, size) \
-	((((protovsid) * VSID_MULTIPLIER_##size) % VSID_MODULUS_##size))
-
-/* simplified form avoiding mod operation */
-#define vsid_scramble(protovsid, size) \
-	({								 \
-		unsigned long x;					 \
-		x = (protovsid) * VSID_MULTIPLIER_##size;		 \
-		x = (x >> VSID_BITS_##size) + (x & VSID_MODULUS_##size); \
-		(x + ((x+1) >> VSID_BITS_##size)) & VSID_MODULUS_##size; \
-	})
-
-#else /* 1 */
 static inline unsigned long vsid_scramble(unsigned long protovsid,
 				  unsigned long vsid_multiplier, int vsid_bits)
 {
@@ -763,8 +743,6 @@ static inline unsigned long vsid_scramble(unsigned long protovsid,
 	vsid = (vsid >> vsid_bits) + (vsid & vsid_modulus);
 	return (vsid + ((vsid + 1) >> vsid_bits)) & vsid_modulus;
 }
-
-#endif /* 1 */
 
 /* Returns the segment size indicator for a user address */
 static inline int user_segment_size(unsigned long addr)
