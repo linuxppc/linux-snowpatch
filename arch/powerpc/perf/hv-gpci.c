@@ -695,7 +695,17 @@ static unsigned long single_gpci_request(u32 req, u32 starting_index,
 
 	ret = plpar_hcall_norets(H_GET_PERF_COUNTER_INFO,
 			virt_to_phys(arg), HGPCI_REQ_BUFFER_SIZE);
-	if (ret) {
+
+	/*
+	 * ret value as 'H_PARAMETER' corresponds to 'GEN_BUF_TOO_SMALL',
+	 * which means that the current buffer size cannot accommodate
+	 * all the information and a partial buffer returned.
+	 * Since in this function we are only accessing data for a given starting index,
+	 * we don't need to accommodate whole data and can get required count by
+	 * accessing very first entry.
+	 * Hence hcall fails only incase the ret value is other than H_SUCCESS or H_PARAMETER.
+	 */
+	if (ret && (ret != H_PARAMETER)) {
 		pr_devel("hcall failed: 0x%lx\n", ret);
 		goto out;
 	}
@@ -724,7 +734,7 @@ static u64 h_gpci_get_value(struct perf_event *event)
 					event_get_offset(event),
 					event_get_length(event),
 					&count);
-	if (ret)
+	if (ret && (ret != H_PARAMETER))
 		return 0;
 	return count;
 }
@@ -759,6 +769,7 @@ static int h_gpci_event_init(struct perf_event *event)
 {
 	u64 count;
 	u8 length;
+	unsigned long ret;
 
 	/* Not our event */
 	if (event->attr.type != event->pmu->type)
@@ -789,13 +800,23 @@ static int h_gpci_event_init(struct perf_event *event)
 	}
 
 	/* check if the request works... */
-	if (single_gpci_request(event_get_request(event),
+	ret = single_gpci_request(event_get_request(event),
 				event_get_starting_index(event),
 				event_get_secondary_index(event),
 				event_get_counter_info_version(event),
 				event_get_offset(event),
 				length,
-				&count)) {
+				&count);
+
+	/*
+	 * ret value as H_AUTHORITY implies that partition is not permitted to retrieve
+	 * performance information, and required to set
+	 * "Enable Performance Information Collection" option.
+	 */
+	if (ret == H_AUTHORITY)
+		return -EPERM;
+
+	if (ret && (ret != H_PARAMETER)) {
 		pr_devel("gpci hcall failed\n");
 		return -EINVAL;
 	}
