@@ -12,6 +12,17 @@
 
 #define __my_cpu_offset local_paca->data_offset
 
+#ifdef CONFIG_JUMP_LABEL
+DECLARE_STATIC_KEY_FALSE(__percpu_embed_first_chunk);
+
+#define is_embed_first_chunk	\
+		(static_key_enabled(&__percpu_embed_first_chunk.key))
+
+#else /* !CONFIG_JUMP_LABEL */
+extern bool __percpu_embed_first_chunk;
+#define is_embed_first_chunk	__percpu_embed_first_chunk
+
+#endif /* CONFIG_JUMP_LABEL */
 #endif /* CONFIG_SMP */
 #endif /* __powerpc64__ */
 

@@ -834,6 +834,11 @@ static __init int pcpu_cpu_to_node(int cpu)
 
 unsigned long __per_cpu_offset[NR_CPUS] __read_mostly;
 EXPORT_SYMBOL(__per_cpu_offset);
+#ifdef CONFIG_JUMP_LABEL
+DEFINE_STATIC_KEY_FALSE(__percpu_embed_first_chunk);
+#else
+bool __percpu_embed_first_chunk;
+#endif
 
 void __init setup_per_cpu_areas(void)
 {
@@ -869,6 +874,13 @@ void __init setup_per_cpu_areas(void)
 			pr_warn("PERCPU: %s allocator failed (%d), "
 				"falling back to page size\n",
 				pcpu_fc_names[pcpu_chosen_fc], rc);
+		else {
+#ifdef CONFIG_JUMP_LABEL
+			static_key_enable(&__percpu_embed_first_chunk.key);
+#else
+			__percpu_embed_first_chunk = true;
+#endif
+		}
 	}
 
 	if (rc < 0)
