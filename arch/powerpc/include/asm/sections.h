@@ -14,6 +14,7 @@ typedef struct func_desc func_desc_t;
 
 extern char __head_end[];
 extern char __srwx_boundary[];
+extern char _sexittext[], _eexittext[];
 
 /* Patch sites */
 extern s32 patch__call_flush_branch_caches1;

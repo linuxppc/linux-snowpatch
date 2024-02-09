@@ -281,7 +281,9 @@ SECTIONS
 	 * to deal with references from __bug_table
 	 */
 	.exit.text : AT(ADDR(.exit.text) - LOAD_OFFSET) {
+		_sexittext = .;
 		EXIT_TEXT
+		_eexittext = .;
 	}
 
 	. = ALIGN(PAGE_SIZE);
