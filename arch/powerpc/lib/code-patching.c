@@ -3,6 +3,7 @@
  *  Copyright 2008 Michael Ellerman, IBM Corporation.
  */
 
+#include <linux/kasan.h>
 #include <linux/kprobes.h>
 #include <linux/mmu_context.h>
 #include <linux/random.h>
@@ -377,6 +378,7 @@ static int __patch_instructions(u32 *patch_addr, u32 *code, size_t len, bool rep
 	unsigned long start = (unsigned long)patch_addr;
 
 	/* Repeat instruction */
+	kasan_disable_current();
 	if (repeat_instr) {
 		ppc_inst_t instr = ppc_inst_read(code);
 
@@ -392,6 +394,7 @@ static int __patch_instructions(u32 *patch_addr, u32 *code, size_t len, bool rep
 	} else {
 		memcpy(patch_addr, code, len);
 	}
+	kasan_enable_current();
 
 	smp_wmb();	/* smp write barrier */
 	flush_icache_range(start, start + len);
