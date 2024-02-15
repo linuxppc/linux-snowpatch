@@ -1,0 +1,1 @@
+../../../../../../arch/powerpc/include/uapi/asm/papr-sysparm.h
