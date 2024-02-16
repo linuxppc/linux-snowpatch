@@ -72,10 +72,10 @@ do
 
 	# ignore register save/restore funcitons
 	case $UNDEF in
-	_restgpr_*|_restgpr0_*|_rest32gpr_*)
+	_restgpr_*|_restgpr0_*|_restgpr1_*|_rest32gpr_*)
 		OK=1
 		;;
-	_savegpr_*|_savegpr0_*|_save32gpr_*)
+	_savegpr_*|_savegpr0_*|_restgpr0_*|_save32gpr_*)
 		OK=1
 		;;
 	esac
