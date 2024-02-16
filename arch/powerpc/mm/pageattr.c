@@ -97,3 +97,26 @@ int change_memory_attr(unsigned long addr, int numpages, long action)
 	return apply_to_existing_page_range(&init_mm, start, size,
 					    change_page_attr, (void *)action);
 }
+
+#if defined(CONFIG_DEBUG_PAGEALLOC) || defined(CONFIG_KFENCE)
+#ifdef CONFIG_ARCH_SUPPORTS_DEBUG_PAGEALLOC
+void __kernel_map_pages(struct page *page, int numpages, int enable)
+{
+	int err;
+	unsigned long addr = (unsigned long)page_address(page);
+
+	if (PageHighMem(page))
+		return;
+
+	if (IS_ENABLED(CONFIG_PPC_BOOK3S_64) && !radix_enabled())
+		err = hash__kernel_map_pages(page, numpages, enable);
+	else if (enable)
+		err = set_memory_p(addr, numpages);
+	else
+		err = set_memory_np(addr, numpages);
+
+	if (err)
+		panic("%s: set_memory_%sp() failed\n", enable ? "" : "n");
+}
+#endif
+#endif
