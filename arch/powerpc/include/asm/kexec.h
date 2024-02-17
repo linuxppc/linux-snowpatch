@@ -108,6 +108,21 @@ void crash_free_reserved_phys_range(unsigned long begin, unsigned long end);
 #endif /* CONFIG_PPC_RTAS */
 #endif /* CONFIG_CRASH_DUMP */
 
+#ifdef CONFIG_PPC64
+struct crash_mem;
+int update_cpus_node(void *fdt);
+int get_crash_memory_ranges(struct crash_mem **mem_ranges);
+
+#ifdef CONFIG_CRASH_HOTPLUG
+void arch_crash_handle_hotplug_event(struct kimage *image, void *arg);
+#define arch_crash_handle_hotplug_event arch_crash_handle_hotplug_event
+
+unsigned int arch_crash_get_elfcorehdr_size(void);
+#define crash_get_elfcorehdr_size arch_crash_get_elfcorehdr_size
+
+#endif /* CONFIG_CRASH_HOTPLUG */
+#endif /* CONFIG_PPC64 */
+
 #ifdef CONFIG_KEXEC_FILE
 extern const struct kexec_file_ops kexec_elf64_ops;
 
