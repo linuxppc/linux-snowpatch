@@ -549,14 +549,13 @@ static void gelic_card_release_tx_chain(struct gelic_card *card, int stop)
 {
 	struct gelic_descr_chain *tx_chain;
 	enum gelic_descr_dma_status status;
-	struct net_device *netdev;
 	int release = 0;
 
 	for (tx_chain = &card->tx_chain;
 	     tx_chain->head != tx_chain->tail && tx_chain->tail;
 	     tx_chain->tail = tx_chain->tail->next) {
 		status = gelic_descr_get_status(tx_chain->tail);
-		netdev = tx_chain->tail->skb->dev;
+
 		switch (status) {
 		case GELIC_DESCR_DMA_RESPONSE_ERROR:
 		case GELIC_DESCR_DMA_PROTECTION_ERROR:
@@ -566,11 +565,14 @@ static void gelic_card_release_tx_chain(struct gelic_card *card, int stop)
 					 "%s: forcing end of tx descriptor " \
 					 "with status %x\n",
 					 __func__, status);
-			netdev->stats.tx_dropped++;
+			tx_chain->tail->skb->dev->stats.tx_dropped++;
 			break;
 
 		case GELIC_DESCR_DMA_COMPLETE:
 			if (tx_chain->tail->skb) {
+				struct net_device *netdev;
+
+				netdev = tx_chain->tail->skb->dev;
 				netdev->stats.tx_packets++;
 				netdev->stats.tx_bytes +=
 					tx_chain->tail->skb->len;
