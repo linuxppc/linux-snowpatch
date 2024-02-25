@@ -28,6 +28,7 @@ TEST_GEN_PROGS := reg_access_test event_attributes_test cycles_test	\
 
 top_srcdir = ../../../../../..
 include ../../../lib.mk
+include ../../include.mk
 
 $(TEST_GEN_PROGS): ../../harness.c ../../utils.c ../event.c ../lib.c \
 	       ebb.c ebb_handler.S trace.c busy_loop.S
