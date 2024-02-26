@@ -22,7 +22,7 @@
  *  work-queue, where a worker thread can drive recovery.
  */
 
-static DEFINE_SPINLOCK(eeh_eventlist_lock);
+DEFINE_SPINLOCK(eeh_eventlist_lock);
 static DECLARE_COMPLETION(eeh_eventlist_event);
 static LIST_HEAD(eeh_eventlist);
 
@@ -91,6 +91,42 @@ int eeh_event_init(void)
 	return 0;
 }
 
+int eeh_phb_event(struct eeh_pe *pe)
+{
+	struct eeh_event *event;
+	unsigned long flags;
+	struct pci_controller *phb;
+
+	event = kzalloc(sizeof(*event), GFP_ATOMIC);
+	if (!event)
+		return -ENOMEM;
+
+	if (pe) {
+		phb = pe->phb;
+		event->pe = pe;
+		INIT_WORK(&event->work, eeh_handle_normal_event_work);
+		eeh_pe_state_mark(pe, EEH_PE_RECOVERING);
+		pr_err("EEH: EVENT=ERROR_DETECTED PHB=%#x PE=%#x\n",
+		       phb->global_number, pe->addr);
+		spin_lock_irqsave(&phb->eeh_eventlist_lock, flags);
+		if (phb->eeh_in_progress) {
+			pr_info("EEH: EEH already in progress on this PHB, queueing.\n");
+			list_add(&event->list, &phb->eeh_eventlist);
+		} else {
+			pr_info("EEH: Beginning recovery on this PHB.\n");
+			WARN_ON_ONCE(!list_empty(&phb->eeh_eventlist));
+			phb->eeh_in_progress = true;
+			queue_work(system_unbound_wq, &event->work);
+		}
+		spin_unlock_irqrestore(&phb->eeh_eventlist_lock, flags);
+	} else {
+		spin_lock_irqsave(&eeh_eventlist_lock, flags);
+		list_add(&event->list, &eeh_eventlist);
+		complete(&eeh_eventlist_event);
+		spin_unlock_irqrestore(&eeh_eventlist_lock, flags);
+	}
+	return 0;
+}
 /**
  * eeh_send_failure_event - Generate a PCI error event
  * @pe: EEH PE
