@@ -810,7 +810,8 @@ config SPI_PL022
 
 config SPI_PPC4xx
 	tristate "PPC4xx SPI Controller"
-	depends on PPC32 && 4xx
+	depends on 4xx || COMPILE_TEST
+	depends on PPC32 || PPC64
 	select SPI_BITBANG
 	help
 	  This selects a driver for the PPC4xx SPI Controller.

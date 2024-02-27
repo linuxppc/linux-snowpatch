@@ -115,15 +115,11 @@ static inline void __dcri_clrset(int base_addr, int base_data, int reg,
 	unsigned int val;
 
 	spin_lock_irqsave(&dcr_ind_lock, flags);
-	if (cpu_has_feature(CPU_FTR_INDEXED_DCR)) {
-		mtdcrx(base_addr, reg);
-		val = (mfdcrx(base_data) & ~clr) | set;
-		mtdcrx(base_data, val);
-	} else {
-		__mtdcr(base_addr, reg);
-		val = (__mfdcr(base_data) & ~clr) | set;
-		__mtdcr(base_data, val);
-	}
+
+	mtdcr(base_addr, reg);
+	val = (mfdcr(base_data) & ~clr) | set;
+	mtdcr(base_data, val);
+
 	spin_unlock_irqrestore(&dcr_ind_lock, flags);
 }
 
