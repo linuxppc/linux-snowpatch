@@ -5239,6 +5239,11 @@ place_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int flags)
 		lag = div_s64(lag, load);
 	}
 
+	if (sched_feat(NOLAG_WAKEUP) && (flags & ENQUEUE_WAKEUP)) {
+		se->vlag = 0;
+		lag = 1;
+	}
+
 	se->vruntime = vruntime - lag;
 
 	/*
