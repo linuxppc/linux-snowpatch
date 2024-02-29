@@ -256,7 +256,12 @@ static int __init ls_pcie_ep_probe(struct platform_device *pdev)
 	pcie->pci = pci;
 	pcie->ls_epc = ls_epc;
 
-	dbi_base = platform_get_resource_byname(pdev, IORESOURCE_MEM, "regs");
+	dbi_base = platform_get_resource_byname(pdev, IORESOURCE_MEM, "dbi");
+	if (!dbi_base) {
+		dev_warn(dev, "Please update your dtb, reg-names 'regs' should be 'dbi'");
+		dbi_base = platform_get_resource_byname(pdev, IORESOURCE_MEM, "regs");
+	}
+
 	pci->dbi_base = devm_pci_remap_cfg_resource(dev, dbi_base);
 	if (IS_ERR(pci->dbi_base))
 		return PTR_ERR(pci->dbi_base);
