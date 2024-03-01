@@ -82,8 +82,12 @@ static int __init early_parse_mem(char *p)
 {
 	if (!p)
 		return 1;
-
+#ifdef CONFIG_PPC64
+	/* Align to 16 MB == size of ppc64 large page */
+	memory_limit = ALIGN(memparse(p, &p), 0x1000000);
+#else
 	memory_limit = PAGE_ALIGN(memparse(p, &p));
+#endif
 	DBG("memory limit = 0x%llx\n", memory_limit);
 
 	return 0;
