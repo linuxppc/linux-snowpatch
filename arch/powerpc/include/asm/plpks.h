@@ -44,9 +44,9 @@
 #define PLPKS_MAX_DATA_SIZE		4000
 
 // Timeouts for PLPKS operations
-#define PLPKS_MAX_TIMEOUT		5000 // msec
-#define PLPKS_FLUSH_SLEEP		10 // msec
-#define PLPKS_FLUSH_SLEEP_RANGE		400
+#define PLPKS_MAX_TIMEOUT		5000000 // usec
+#define PLPKS_FLUSH_SLEEP		5000 // usec
+#define PLPKS_FLUSH_SLEEP_RANGE		5000
 
 struct plpks_var {
 	char *component;
