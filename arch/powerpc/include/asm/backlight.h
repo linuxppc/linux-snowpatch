@@ -10,6 +10,7 @@
 #define __ASM_POWERPC_BACKLIGHT_H
 #ifdef __KERNEL__
 
+#include <linux/backlight.h>
 #include <linux/fb.h>
 #include <linux/mutex.h>
 
