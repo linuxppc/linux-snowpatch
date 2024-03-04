@@ -15,6 +15,8 @@
 
 #undef VERBOSE
 
+#define pr_fmt(x) "udc: " x
+
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/ioport.h>
@@ -285,7 +287,7 @@ static int dr_controller_setup(struct fsl_udc *udc)
 	timeout = jiffies + FSL_UDC_RESET_TIMEOUT;
 	while (fsl_readl(&dr_regs->usbcmd) & USB_CMD_CTRL_RESET) {
 		if (time_after(jiffies, timeout)) {
-			ERR("udc reset timeout!\n");
+			pr_err("udc reset timeout!\n");
 			return -ETIMEDOUT;
 		}
 		cpu_relax();
@@ -1105,7 +1107,7 @@ static void fsl_ep_fifo_flush(struct usb_ep *_ep)
 		/* Wait until flush complete */
 		while (fsl_readl(&dr_regs->endptflush)) {
 			if (time_after(jiffies, timeout)) {
-				ERR("ep flush timeout\n");
+				pr_err("ep flush timeout\n");
 				return;
 			}
 			cpu_relax();
@@ -1543,7 +1545,7 @@ static void ep0_req_complete(struct fsl_udc *udc, struct fsl_ep *ep0,
 		udc->ep0_state = WAIT_FOR_SETUP;
 		break;
 	case WAIT_FOR_SETUP:
-		ERR("Unexpected ep0 packets\n");
+		pr_err("Unexpected ep0 packets\n");
 		break;
 	default:
 		ep0stall(udc);
@@ -1612,7 +1614,7 @@ static int process_ep_req(struct fsl_udc *udc, int pipe,
 		errors = hc32_to_cpu(curr_td->size_ioc_sts);
 		if (errors & DTD_ERROR_MASK) {
 			if (errors & DTD_STATUS_HALTED) {
-				ERR("dTD error %08x QH=%d\n", errors, pipe);
+				pr_err("dTD error %08x QH=%d\n", errors, pipe);
 				/* Clear the errors and Halt condition */
 				tmp = hc32_to_cpu(curr_qh->size_ioc_int_sts);
 				tmp &= ~errors;
@@ -1631,7 +1633,7 @@ static int process_ep_req(struct fsl_udc *udc, int pipe,
 				status = -EILSEQ;
 				break;
 			} else
-				ERR("Unknown error has occurred (0x%x)!\n",
+				pr_err("Unknown error has occurred (0x%x)!\n",
 					errors);
 
 		} else if (hc32_to_cpu(curr_td->size_ioc_sts)
@@ -1691,7 +1693,7 @@ static void dtd_complete_irq(struct fsl_udc *udc)
 
 		/* If the ep is configured */
 		if (!curr_ep->ep.name) {
-			WARNING("Invalid EP?");
+			pr_warn("Invalid EP?\n");
 			continue;
 		}
 
@@ -1820,7 +1822,7 @@ static void reset_irq(struct fsl_udc *udc)
 	while (fsl_readl(&dr_regs->endpointprime)) {
 		/* Wait until all endptprime bits cleared */
 		if (time_after(jiffies, timeout)) {
-			ERR("Timeout for reset\n");
+			pr_err("Timeout for reset\n");
 			break;
 		}
 		cpu_relax();
@@ -1958,7 +1960,7 @@ static int fsl_udc_start(struct usb_gadget *g,
 					udc_controller->transceiver->otg,
 						    &udc_controller->gadget);
 			if (retval < 0) {
-				ERR("can't bind to transceiver\n");
+				pr_err("can't bind to transceiver\n");
 				udc_controller->driver = NULL;
 				return retval;
 			}
@@ -2243,7 +2245,7 @@ static int struct_udc_setup(struct fsl_udc *udc,
 
 	udc->eps = kcalloc(udc->max_ep, sizeof(struct fsl_ep), GFP_KERNEL);
 	if (!udc->eps) {
-		ERR("kmalloc udc endpoint status failed\n");
+		pr_err("kmalloc udc endpoint status failed\n");
 		goto eps_alloc_failed;
 	}
 
@@ -2258,7 +2260,7 @@ static int struct_udc_setup(struct fsl_udc *udc,
 	udc->ep_qh = dma_alloc_coherent(&pdev->dev, size,
 					&udc->ep_qh_dma, GFP_KERNEL);
 	if (!udc->ep_qh) {
-		ERR("malloc QHs for udc failed\n");
+		pr_err("malloc QHs for udc failed\n");
 		goto ep_queue_alloc_failed;
 	}
 
@@ -2269,14 +2271,14 @@ static int struct_udc_setup(struct fsl_udc *udc,
 	udc->status_req = container_of(fsl_alloc_request(NULL, GFP_KERNEL),
 			struct fsl_req, req);
 	if (!udc->status_req) {
-		ERR("kzalloc for udc status request failed\n");
+		pr_err("kzalloc for udc status request failed\n");
 		goto udc_status_alloc_failed;
 	}
 
 	/* allocate a small amount of memory to get valid address */
 	udc->status_req->req.buf = kmalloc(8, GFP_KERNEL);
 	if (!udc->status_req->req.buf) {
-		ERR("kzalloc for udc request buffer failed\n");
+		pr_err("kzalloc for udc request buffer failed\n");
 		goto udc_req_buf_alloc_failed;
 	}
 
@@ -2373,7 +2375,7 @@ static int fsl_udc_probe(struct platform_device *pdev)
 	if (pdata->operating_mode == FSL_USB2_DR_OTG) {
 		udc_controller->transceiver = usb_get_phy(USB_PHY_TYPE_USB2);
 		if (IS_ERR_OR_NULL(udc_controller->transceiver)) {
-			ERR("Can't find OTG driver!\n");
+			pr_err("Can't find OTG driver!\n");
 			ret = -ENODEV;
 			goto err_kfree;
 		}
@@ -2389,7 +2391,7 @@ static int fsl_udc_probe(struct platform_device *pdev)
 	if (pdata->operating_mode == FSL_USB2_DR_DEVICE) {
 		if (!request_mem_region(res->start, resource_size(res),
 					driver_name)) {
-			ERR("request mem region for %s failed\n", pdev->name);
+			pr_err("request mem region for %s failed\n", pdev->name);
 			ret = -EBUSY;
 			goto err_kfree;
 		}
@@ -2420,7 +2422,7 @@ static int fsl_udc_probe(struct platform_device *pdev)
 	/* Read Device Controller Capability Parameters register */
 	dccparams = fsl_readl(&dr_regs->dccparams);
 	if (!(dccparams & DCCPARAMS_DC)) {
-		ERR("This SOC doesn't support device role\n");
+		pr_err("This SOC doesn't support device role\n");
 		ret = -ENODEV;
 		goto err_exit;
 	}
@@ -2438,14 +2440,14 @@ static int fsl_udc_probe(struct platform_device *pdev)
 	ret = request_irq(udc_controller->irq, fsl_udc_irq, IRQF_SHARED,
 			driver_name, udc_controller);
 	if (ret != 0) {
-		ERR("cannot request irq %d err %d\n",
+		pr_err("cannot request irq %d err %d\n",
 				udc_controller->irq, ret);
 		goto err_exit;
 	}
 
 	/* Initialize the udc structure including QH member and other member */
 	if (struct_udc_setup(udc_controller, pdev)) {
-		ERR("Can't initialize udc data structure\n");
+		pr_err("Can't initialize udc data structure\n");
 		ret = -ENOMEM;
 		goto err_free_irq;
 	}

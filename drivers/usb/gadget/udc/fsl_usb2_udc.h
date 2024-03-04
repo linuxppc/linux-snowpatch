@@ -508,13 +508,6 @@ struct fsl_udc {
 
 /*-------------------------------------------------------------------------*/
 
-#ifdef DEBUG
-#define DBG(fmt, args...) 	printk(KERN_DEBUG "[%s]  " fmt "\n", \
-				__func__, ## args)
-#else
-#define DBG(fmt, args...)	do{}while(0)
-#endif
-
 #if 0
 static void dump_msg(const char *label, const u8 * buf, unsigned int length)
 {
@@ -523,7 +516,7 @@ static void dump_msg(const char *label, const u8 * buf, unsigned int length)
 
 	if (length >= 512)
 		return;
-	DBG("%s, length %u:\n", label, length);
+	pr_debug("[%s] %s, length %u:\n", __func__, label, length);
 	start = 0;
 	while (length > 0) {
 		num = min(length, 16u);
@@ -535,7 +528,7 @@ static void dump_msg(const char *label, const u8 * buf, unsigned int length)
 			p += 3;
 		}
 		*p = 0;
-		printk(KERN_DEBUG "%6x: %s\n", start, line);
+		pr_debug("%6x: %s\n", start, line);
 		buf += num;
 		start += num;
 		length -= num;
@@ -544,14 +537,10 @@ static void dump_msg(const char *label, const u8 * buf, unsigned int length)
 #endif
 
 #ifdef VERBOSE
-#define VDBG		DBG
+#define VDBG(fmt, args...)	pr_debug("[%s] " fmt "\n", ## args)
 #else
-#define VDBG(stuff...)	do{}while(0)
+#define VDBG(fmt, args...)	do {} while(0)
 #endif
-
-#define ERR(stuff...)		pr_err("udc: " stuff)
-#define WARNING(stuff...)	pr_warn("udc: " stuff)
-#define INFO(stuff...)		pr_info("udc: " stuff)
 
 /*-------------------------------------------------------------------------*/
 
