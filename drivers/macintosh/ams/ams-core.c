@@ -178,25 +178,24 @@ release_freefall:
 
 static int __init ams_init(void)
 {
-	struct device_node *np;
-
 	spin_lock_init(&ams_info.irq_lock);
 	mutex_init(&ams_info.lock);
 	INIT_WORK(&ams_info.worker, ams_worker);
 
-#ifdef CONFIG_SENSORS_AMS_I2C
-	np = of_find_node_by_name(NULL, "accelerometer");
-	if (np && of_device_is_compatible(np, "AAPL,accelerometer_1"))
-		/* Found I2C motion sensor */
-		return ams_i2c_init(np);
-#endif
+	if (IS_ENABLED(CONFIG_SENSORS_AMS_I2C)) {
+		struct device_node *np = of_find_node_by_name(NULL, "accelerometer");
+		if (np && of_device_is_compatible(np, "AAPL,accelerometer_1"))
+			/* Found I2C motion sensor */
+			return ams_i2c_init(np);
+	}
 
-#ifdef CONFIG_SENSORS_AMS_PMU
-	np = of_find_node_by_name(NULL, "sms");
-	if (np && of_device_is_compatible(np, "sms"))
-		/* Found PMU motion sensor */
-		return ams_pmu_init(np);
-#endif
+	if (IS_ENABLED(CONFIG_SENSORS_AMS_PMU)) {
+		struct device_node *np = of_find_node_by_name(NULL, "sms");
+		if (np && of_device_is_compatible(np, "sms"))
+			/* Found PMU motion sensor */
+			return ams_pmu_init(np);
+	}
+
 	return -ENODEV;
 }
 
