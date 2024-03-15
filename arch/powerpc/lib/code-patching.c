@@ -372,9 +372,43 @@ int patch_instruction(u32 *addr, ppc_inst_t instr)
 }
 NOKPROBE_SYMBOL(patch_instruction);
 
+static int patch_memset64(u64 *addr, u64 val, size_t count)
+{
+	for (u64 *end = addr + count; addr < end; addr++)
+		__put_kernel_nofault(addr, &val, u64, failed);
+
+	return 0;
+
+failed:
+	return -EPERM;
+}
+
+static int patch_memset32(u32 *addr, u32 val, size_t count)
+{
+	for (u32 *end = addr + count; addr < end; addr++)
+		__put_kernel_nofault(addr, &val, u32, failed);
+
+	return 0;
+
+failed:
+	return -EPERM;
+}
+
+static int patch_memcpy32(u32 *dst, u32 *src, size_t count)
+{
+	for (u32 *end = src + count; src < end; dst++, src++)
+		__put_kernel_nofault(dst, src, u32, failed);
+
+	return 0;
+
+failed:
+	return -EPERM;
+}
+
 static int __patch_instructions(u32 *patch_addr, u32 *code, size_t len, bool repeat_instr)
 {
 	unsigned long start = (unsigned long)patch_addr;
+	int err;
 
 	/* Repeat instruction */
 	if (repeat_instr) {
@@ -383,19 +417,19 @@ static int __patch_instructions(u32 *patch_addr, u32 *code, size_t len, bool rep
 		if (ppc_inst_prefixed(instr)) {
 			u64 val = ppc_inst_as_ulong(instr);
 
-			memset64((u64 *)patch_addr, val, len / 8);
+			err = patch_memset64((u64 *)patch_addr, val, len / 8);
 		} else {
 			u32 val = ppc_inst_val(instr);
 
-			memset32(patch_addr, val, len / 4);
+			err = patch_memset32(patch_addr, val, len / 4);
 		}
 	} else {
-		memcpy(patch_addr, code, len);
+		err = patch_memcpy32(patch_addr, code, len / 4);
 	}
 
 	smp_wmb();	/* smp write barrier */
 	flush_icache_range(start, start + len);
-	return 0;
+	return err;
 }
 
 /*
