@@ -4115,6 +4115,7 @@ static int kvmhv_vcpu_entry_nestedv2(struct kvm_vcpu *vcpu, u64 time_limit,
 	unsigned long msr, i;
 	int trap;
 	long rc;
+	struct lppaca *lp = get_lppaca();
 
 	io = &vcpu->arch.nestedv2_io;
 
@@ -4130,6 +4131,17 @@ static int kvmhv_vcpu_entry_nestedv2(struct kvm_vcpu *vcpu, u64 time_limit,
 	kvmppc_gse_put_u64(io->vcpu_run_input, KVMPPC_GSID_LPCR, lpcr);
 
 	accumulate_time(vcpu, &vcpu->arch.in_guest);
+
+	/* Reset the guest host context switch timing */
+	if (unlikely(trace_kvmppc_vcpu_exit_cs_time_enabled())) {
+		lp->l2_accumul_cntrs_enable = 1;
+		lp->l1_to_l2_cs_tb = 0;
+		lp->l2_to_l1_cs_tb = 0;
+		lp->l2_runtime_tb = 0;
+	} else {
+		lp->l2_accumul_cntrs_enable = 0;
+	}
+
 	rc = plpar_guest_run_vcpu(0, vcpu->kvm->arch.lpid, vcpu->vcpu_id,
 				  &trap, &i);
 
@@ -4155,6 +4167,14 @@ static int kvmhv_vcpu_entry_nestedv2(struct kvm_vcpu *vcpu, u64 time_limit,
 		return -EINVAL;
 
 	timer_rearm_host_dec(*tb);
+
+	/* Record context switch and guest_run_time data */
+	if (unlikely(trace_kvmppc_vcpu_exit_cs_time_enabled())) {
+		vcpu->arch.l1_to_l2_cs = tb_to_ns(be64_to_cpu(lp->l1_to_l2_cs_tb));
+		vcpu->arch.l2_to_l1_cs = tb_to_ns(be64_to_cpu(lp->l2_to_l1_cs_tb));
+		vcpu->arch.l2_runtime = tb_to_ns(be64_to_cpu(lp->l2_runtime_tb));
+		trace_kvmppc_vcpu_exit_cs_time(vcpu);
+	}
 
 	return trap;
 }
