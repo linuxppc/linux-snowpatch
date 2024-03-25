@@ -517,6 +517,18 @@ config PPC_KUAP_DEBUG
 	  Add extra debugging for Kernel Userspace Access Protection (KUAP)
 	  If you're unsure, say N.
 
+config PPC_KERNEL_ROP_PROTECT
+	bool "Kernel ROP Protection"
+	default y
+	depends on PPC64_ELF_ABI_V2
+	depends on !CC_IS_GCC || TARGET_CPU = "power10"
+	help
+	  This tells the compiler to insert hashstp/hashckp instructions
+	  in the prologue and epilogue of every kernel function. The kernel
+	  also turns on the DEXCR[PHIE] aspect to cause an exception if the
+	  hashchkp does not agree with the hash calculated by the matching
+	  hashstp.
+
 config PPC_PKEY
 	def_bool y
 	depends on PPC_BOOK3S_64

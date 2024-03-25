@@ -1620,6 +1620,12 @@ void start_secondary(void *unused)
 {
 	unsigned int cpu = raw_smp_processor_id();
 
+	/* Enable hash instructions on this CPU in case not already enabled by the hypervisor */
+	if (IS_ENABLED(CONFIG_PPC_KERNEL_ROP_PROTECT) && cpu_has_feature(CPU_FTR_ARCH_31)) {
+		mtspr(SPRN_DEXCR, mfspr(SPRN_DEXCR) | DEXCR_PNH_PHIE);
+		isync();
+	}
+
 	/* PPC64 calls setup_kup() in early_setup_secondary() */
 	if (IS_ENABLED(CONFIG_PPC32))
 		setup_kup();

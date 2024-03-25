@@ -1011,6 +1011,16 @@ start_here_multiplatform:
 	mtctr	r12
 	bctrl		/* also sets r13 and SPRG_PACA */
 
+#ifdef CONFIG_PPC_KERNEL_ROP_PROTECT
+BEGIN_FTR_SECTION
+	mfspr	r3,SPRN_DEXCR
+	LOAD_REG_IMMEDIATE(r4,DEXCR_PNH_PHIE)
+	or	r3,r3,r4
+	mtspr	SPRN_DEXCR,r3
+	isync
+END_FTR_SECTION_IFSET(CPU_FTR_ARCH_31)
+#endif
+
 	LOAD_REG_ADDR(r3, start_here_common)
 	ld	r4,PACAKMSR(r13)
 	mtspr	SPRN_SRR0,r3

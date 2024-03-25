@@ -168,6 +168,9 @@ endif
 CFLAGS-$(CONFIG_TARGET_CPU_BOOL) += -mcpu=$(CONFIG_TARGET_CPU)
 AFLAGS-$(CONFIG_TARGET_CPU_BOOL) += -mcpu=$(CONFIG_TARGET_CPU)
 
+CFLAGS-$(CONFIG_PPC_KERNEL_ROP_PROTECT) += $(call cc-option,-mrop-protect)
+CFLAGS-$(CONFIG_PPC_KERNEL_ROP_PROTECT) += $(call cc-option,-mprivileged)
+
 CFLAGS-y += $(CONFIG_TUNE_CPU)
 
 asinstr := $(call as-instr,lis 9$(comma)foo@high,-DHAVE_AS_ATHIGH=1)
