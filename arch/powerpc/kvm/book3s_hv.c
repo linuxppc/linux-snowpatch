@@ -4108,6 +4108,27 @@ static void vcpu_vpa_increment_dispatch(struct kvm_vcpu *vcpu)
 	}
 }
 
+static void do_trace_nested_cs_time(struct kvm_vcpu *vcpu)
+{
+	struct lppaca *lp = get_lppaca();
+	u64 l1_to_l2_ns, l2_to_l1_ns, l2_runtime_ns;
+
+	l1_to_l2_ns = tb_to_ns(be64_to_cpu(lp->l1_to_l2_cs_tb));
+	l2_to_l1_ns = tb_to_ns(be64_to_cpu(lp->l2_to_l1_cs_tb));
+	l2_runtime_ns = tb_to_ns(be64_to_cpu(lp->l2_runtime_tb));
+	trace_kvmppc_vcpu_exit_cs_time(vcpu, l1_to_l2_ns, l2_to_l1_ns,
+					l2_runtime_ns);
+	lp->l1_to_l2_cs_tb = 0;
+	lp->l2_to_l1_cs_tb = 0;
+	lp->l2_runtime_tb = 0;
+	lp->l2_accumul_cntrs_enable = 0;
+
+	// Maintain an aggregate of context switch times
+	vcpu->arch.l1_to_l2_cs_agg += l1_to_l2_ns;
+	vcpu->arch.l2_to_l1_cs_agg += l2_to_l1_ns;
+	vcpu->arch.l2_runtime_agg += l2_runtime_ns;
+}
+
 static int kvmhv_vcpu_entry_nestedv2(struct kvm_vcpu *vcpu, u64 time_limit,
 				     unsigned long lpcr, u64 *tb)
 {
@@ -4130,6 +4151,11 @@ static int kvmhv_vcpu_entry_nestedv2(struct kvm_vcpu *vcpu, u64 time_limit,
 	kvmppc_gse_put_u64(io->vcpu_run_input, KVMPPC_GSID_LPCR, lpcr);
 
 	accumulate_time(vcpu, &vcpu->arch.in_guest);
+
+	/* Enable the guest host context switch time tracking */
+	if (unlikely(trace_kvmppc_vcpu_exit_cs_time_enabled()))
+		get_lppaca()->l2_accumul_cntrs_enable = 1;
+
 	rc = plpar_guest_run_vcpu(0, vcpu->kvm->arch.lpid, vcpu->vcpu_id,
 				  &trap, &i);
 
@@ -4155,6 +4181,10 @@ static int kvmhv_vcpu_entry_nestedv2(struct kvm_vcpu *vcpu, u64 time_limit,
 		return -EINVAL;
 
 	timer_rearm_host_dec(*tb);
+
+	/* Record context switch and guest_run_time data */
+	if (get_lppaca()->l2_accumul_cntrs_enable)
+		do_trace_nested_cs_time(vcpu);
 
 	return trap;
 }
