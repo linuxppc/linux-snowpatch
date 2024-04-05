@@ -184,6 +184,8 @@ static unsigned h_pic(unsigned long *pool_idle_time,
 	return rc;
 }
 
+unsigned long boot_pool_idle_time;
+
 /*
  * parse_ppp_data
  * Parse out the data returned from h_get_ppp and h_pic
@@ -218,6 +220,7 @@ static void parse_ppp_data(struct seq_file *m)
 		h_pic(&pool_idle_time, &pool_procs);
 		seq_printf(m, "pool_idle_time=%ld\n", pool_idle_time);
 		seq_printf(m, "pool_num_procs=%ld\n", pool_procs);
+		seq_printf(m, "boot_pool_idle_time=%ld\n", boot_pool_idle_time);
 	}
 
 	seq_printf(m, "unallocated_capacity_weight=%d\n",
@@ -792,6 +795,7 @@ static const struct proc_ops lparcfg_proc_ops = {
 static int __init lparcfg_init(void)
 {
 	umode_t mode = 0444;
+	unsigned long num_procs;
 
 	/* Allow writing if we have FW_FEATURE_SPLPAR */
 	if (firmware_has_feature(FW_FEATURE_SPLPAR))
@@ -801,6 +805,9 @@ static int __init lparcfg_init(void)
 		printk(KERN_ERR "Failed to create powerpc/lparcfg\n");
 		return -EIO;
 	}
+
+	h_pic(&boot_pool_idle_time, &num_procs);
+
 	return 0;
 }
 machine_device_initcall(pseries, lparcfg_init);
