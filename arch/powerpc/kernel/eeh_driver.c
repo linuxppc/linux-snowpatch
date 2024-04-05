@@ -867,7 +867,13 @@ void eeh_handle_normal_event(struct eeh_pe *pe)
 	if (!devices) {
 		pr_debug("EEH: Frozen PHB#%x-PE#%x is empty!\n",
 			pe->phb->global_number, pe->addr);
-		goto out; /* nothing to recover */
+		/*
+		 * The device is removed, Tear down its state,
+		 * On powernv hotplug driver would take care of
+		 * it but not on pseries, Permanently disable the
+		 * card as it is hot removed.
+		 */
+		goto recover_failed;
 	}
 
 	/* Log the event */
