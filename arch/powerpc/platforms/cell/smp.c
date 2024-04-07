@@ -55,6 +55,8 @@ static cpumask_t of_spin_map;
 /**
  * smp_startup_cpu() - start the given cpu
  *
+ * @lcpu: Logical CPU ID of the CPU to be started.
+ *
  * At boot time, there is nothing to do for primary threads which were
  * started from Open Firmware.  For anything else, call RTAS with the
  * appropriate start location.

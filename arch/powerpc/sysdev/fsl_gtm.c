@@ -77,7 +77,7 @@ struct gtm {
 static LIST_HEAD(gtms);
 
 /**
- * gtm_get_timer - request GTM timer to use it with the rest of GTM API
+ * gtm_get_timer16 - request GTM timer to use it with the rest of GTM API
  * Context:	non-IRQ
  *
  * This function reserves GTM timer for later use. It returns gtm_timer
@@ -110,7 +110,7 @@ struct gtm_timer *gtm_get_timer16(void)
 EXPORT_SYMBOL(gtm_get_timer16);
 
 /**
- * gtm_get_specific_timer - request specific GTM timer
+ * gtm_get_specific_timer16 - request specific GTM timer
  * @gtm:	specific GTM, pass here GTM's device_node->data
  * @timer:	specific timer number, Timer1 is 0.
  * Context:	non-IRQ
@@ -276,7 +276,7 @@ EXPORT_SYMBOL(gtm_set_timer16);
  * crop precision of the "usec" argument, thus usec is limited to 16 bits
  * (single timer width).
  */
-int gtm_set_exact_timer16(struct gtm_timer *tmr, u16 usec, bool reload)
+int gtm_set_exact_utimer16(struct gtm_timer *tmr, u16 usec, bool reload)
 {
 	/* quite obvious, frequency which is enough for µSec precision */
 	const int freq = 1000000;
