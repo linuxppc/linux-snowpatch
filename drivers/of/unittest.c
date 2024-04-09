@@ -921,10 +921,10 @@ static void __init of_unittest_changeset(void)
 #endif
 }
 
-static void __init of_unittest_dma_get_max_cpu_address(void)
+static void __init of_unittest_dma_get_cpu_limits(void)
 {
 	struct device_node *np;
-	phys_addr_t cpu_addr;
+	phys_addr_t cpu_addr_max, cpu_addr_min;
 
 	if (!IS_ENABLED(CONFIG_OF_ADDRESS))
 		return;
@@ -935,10 +935,13 @@ static void __init of_unittest_dma_get_max_cpu_address(void)
 		return;
 	}
 
-	cpu_addr = of_dma_get_max_cpu_address(np);
-	unittest(cpu_addr == 0x4fffffff,
-		 "of_dma_get_max_cpu_address: wrong CPU addr %pad (expecting %x)\n",
-		 &cpu_addr, 0x4fffffff);
+	of_dma_get_cpu_limits(np, &cpu_addr_max, &cpu_addr_min);
+	unittest(cpu_addr_max == 0x4fffffff,
+		 "of_dma_get_cpu_limits: wrong CPU max addr %pad (expecting %x)\n",
+		 &cpu_addr_max, 0x4fffffff);
+	unittest(cpu_addr_min == 0x40000000,
+		 "of_dma_get_cpu_limits: wrong CPU min addr %pad (expecting %x)\n",
+		 &cpu_addr_min, 0x40000000);
 }
 
 static void __init of_unittest_dma_ranges_one(const char *path,
@@ -4109,7 +4112,7 @@ static int __init of_unittest(void)
 	of_unittest_changeset();
 	of_unittest_parse_interrupts();
 	of_unittest_parse_interrupts_extended();
-	of_unittest_dma_get_max_cpu_address();
+	of_unittest_dma_get_cpu_limits();
 	of_unittest_parse_dma_ranges();
 	of_unittest_pci_dma_ranges();
 	of_unittest_bus_ranges();

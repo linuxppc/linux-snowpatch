@@ -964,21 +964,25 @@ out:
 #endif /* CONFIG_HAS_DMA */
 
 /**
- * of_dma_get_max_cpu_address - Gets highest CPU address suitable for DMA
+ * of_dma_get_cpu_limits - Gets highest CPU address suitable for DMA
  * @np: The node to start searching from or NULL to start from the root
+ * @max: Pointer to high address limit or NULL if not needed
+ * @min: Pointer to low address limit or NULL if not needed
  *
  * Gets the highest CPU physical address that is addressable by all DMA masters
- * in the sub-tree pointed by np, or the whole tree if NULL is passed. If no
- * DMA constrained device is found, it returns PHYS_ADDR_MAX.
+ * in the sub-tree pointed by np, or the whole tree if @np in NULL. If no
+ * DMA constrained device is found, @*max is PHYS_ADDR_MAX, and @*low is 0.
  */
-phys_addr_t __init of_dma_get_max_cpu_address(struct device_node *np)
+void __init of_dma_get_cpu_limits(struct device_node *np,
+		phys_addr_t *max, phys_addr_t *min)
 {
 	phys_addr_t max_cpu_addr = PHYS_ADDR_MAX;
 	struct of_range_parser parser;
-	phys_addr_t subtree_max_addr;
+	phys_addr_t min_cpu_addr = 0;
 	struct device_node *child;
 	struct of_range range;
 	const __be32 *ranges;
+	u64 cpu_start = 0;
 	u64 cpu_end = 0;
 	int len;
 
@@ -988,21 +992,33 @@ phys_addr_t __init of_dma_get_max_cpu_address(struct device_node *np)
 	ranges = of_get_property(np, "dma-ranges", &len);
 	if (ranges && len) {
 		of_dma_range_parser_init(&parser, np);
-		for_each_of_range(&parser, &range)
-			if (range.cpu_addr + range.size > cpu_end)
+		for_each_of_range(&parser, &range) {
+			if (range.cpu_addr + range.size > cpu_end) {
 				cpu_end = range.cpu_addr + range.size - 1;
+				cpu_start = range.cpu_addr;
+			}
+		}
 
-		if (max_cpu_addr > cpu_end)
+		if (max_cpu_addr > cpu_end) {
 			max_cpu_addr = cpu_end;
+			min_cpu_addr = cpu_start;
+		}
 	}
 
 	for_each_available_child_of_node(np, child) {
-		subtree_max_addr = of_dma_get_max_cpu_address(child);
-		if (max_cpu_addr > subtree_max_addr)
+		phys_addr_t subtree_max_addr, subtree_min_addr;
+
+		of_dma_get_cpu_limits(child, &subtree_max_addr, &subtree_min_addr);
+		if (max_cpu_addr > subtree_max_addr) {
 			max_cpu_addr = subtree_max_addr;
+			min_cpu_addr = subtree_min_addr;
+		}
 	}
 
-	return max_cpu_addr;
+	if (max)
+		*max = max_cpu_addr;
+	if (min)
+		*min = min_cpu_addr;
 }
 
 /**

@@ -454,7 +454,8 @@ int of_map_id(struct device_node *np, u32 id,
 	       const char *map_name, const char *map_mask_name,
 	       struct device_node **target, u32 *id_out);
 
-phys_addr_t of_dma_get_max_cpu_address(struct device_node *np);
+void of_dma_get_cpu_limits(struct device_node *np, phys_addr_t *max,
+		phys_addr_t *min);
 
 struct kimage;
 void *of_kexec_alloc_and_setup_fdt(const struct kimage *image,
@@ -880,9 +881,13 @@ static inline int of_map_id(struct device_node *np, u32 id,
 	return -EINVAL;
 }
 
-static inline phys_addr_t of_dma_get_max_cpu_address(struct device_node *np)
+static inline void of_dma_get_cpu_limits(struct device_node *np,
+		phys_addr_t *max, phys_addr_t *min)
 {
-	return PHYS_ADDR_MAX;
+	if (max)
+		*max = PHYS_ADDR_MAX;
+	if (min)
+		*min = 0;
 }
 
 static inline const void *of_device_get_match_data(const struct device *dev)
