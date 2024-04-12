@@ -476,11 +476,13 @@ static void hvc_hangup(struct tty_struct *tty)
 static int hvc_push(struct hvc_struct *hp)
 {
 	int n;
+	struct tty_struct *tty;
 
 	n = hp->ops->put_chars(hp->vtermno, hp->outbuf, hp->n_outbuf);
+	tty = tty_port_tty_get(&hp->port);
 	if (n <= 0) {
 		if (n == 0 || n == -EAGAIN) {
-			hp->do_wakeup = 1;
+			tty_wakeup(tty);
 			return 0;
 		}
 		/* throw away output on error; this happens when
@@ -491,7 +493,7 @@ static int hvc_push(struct hvc_struct *hp)
 	if (hp->n_outbuf > 0)
 		memmove(hp->outbuf, hp->outbuf + n, hp->n_outbuf);
 	else
-		hp->do_wakeup = 1;
+		tty_wakeup(tty);
 
 	return n;
 }
@@ -739,11 +741,7 @@ static int __hvc_poll(struct hvc_struct *hp, bool may_sleep)
 	poll_mask |= HVC_POLL_READ;
 
  out:
-	/* Wakeup write queue if necessary */
-	if (hp->do_wakeup) {
-		hp->do_wakeup = 0;
-		tty_wakeup(tty);
-	}
+	/* Wakeup in hvc_push */
  bail:
 	spin_unlock_irqrestore(&hp->lock, flags);
 
