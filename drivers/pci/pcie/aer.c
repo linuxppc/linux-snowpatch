@@ -885,7 +885,8 @@ static int find_device_iter(struct pci_dev *dev, void *data)
 		/* List this device */
 		if (add_error_device(e_info, dev)) {
 			/* We cannot handle more... Stop iteration */
-			/* TODO: Should print error message here? */
+			pr_err("find_device_iter: Cannot handle more devices.
+					Stopping iteration");
 			return 1;
 		}
 
