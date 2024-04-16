@@ -13,7 +13,11 @@
 
 void __iomem *ioport_map(unsigned long port, unsigned int len)
 {
+#ifdef CONFIG_HAS_IOPORT
 	return (void __iomem *) (port + _IO_BASE);
+#else
+	return NULL;
+#endif
 }
 EXPORT_SYMBOL(ioport_map);
 

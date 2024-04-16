@@ -37,7 +37,6 @@ extern struct pci_dev *isa_bridge_pcidev;
  * define properly based on the platform
  */
 #ifndef CONFIG_PCI
-#define _IO_BASE	0
 #define _ISA_MEM_BASE	0
 #define PCI_DRAM_OFFSET 0
 #elif defined(CONFIG_PPC32)
@@ -486,8 +485,7 @@ static inline u64 __raw_rm_readq(volatile void __iomem *paddr)
  * to port it over
  */
 
-#ifdef CONFIG_PPC32
-
+#if defined(CONFIG_PPC32) && defined(CONFIG_HAS_IOPORT)
 #define __do_in_asm(name, op)				\
 static inline unsigned int name(unsigned int port)	\
 {							\
@@ -534,7 +532,7 @@ __do_out_asm(_rec_outb, "stbx")
 __do_out_asm(_rec_outw, "sthbrx")
 __do_out_asm(_rec_outl, "stwbrx")
 
-#endif /* CONFIG_PPC32 */
+#endif /* CONFIG_PPC32 && CONFIG_HAS_IOPORT */
 
 /* The "__do_*" operations below provide the actual "base" implementation
  * for each of the defined accessors. Some of them use the out_* functions
@@ -577,6 +575,7 @@ __do_out_asm(_rec_outl, "stwbrx")
 #define __do_readq_be(addr)	in_be64(PCI_FIX_ADDR(addr))
 #endif /* !defined(CONFIG_EEH) */
 
+#ifdef CONFIG_HAS_IOPORT
 #ifdef CONFIG_PPC32
 #define __do_outb(val, port)	_rec_outb(val, port)
 #define __do_outw(val, port)	_rec_outw(val, port)
@@ -592,6 +591,7 @@ __do_out_asm(_rec_outl, "stwbrx")
 #define __do_inw(port)		readw((PCI_IO_ADDR)_IO_BASE + port);
 #define __do_inl(port)		readl((PCI_IO_ADDR)_IO_BASE + port);
 #endif /* !CONFIG_PPC32 */
+#endif
 
 #ifdef CONFIG_EEH
 #define __do_readsb(a, b, n)	eeh_readsb(PCI_FIX_ADDR(a), (b), (n))
@@ -606,12 +606,14 @@ __do_out_asm(_rec_outl, "stwbrx")
 #define __do_writesw(a, b, n)	_outsw(PCI_FIX_ADDR(a),(b),(n))
 #define __do_writesl(a, b, n)	_outsl(PCI_FIX_ADDR(a),(b),(n))
 
+#ifdef CONFIG_HAS_IOPORT
 #define __do_insb(p, b, n)	readsb((PCI_IO_ADDR)_IO_BASE+(p), (b), (n))
 #define __do_insw(p, b, n)	readsw((PCI_IO_ADDR)_IO_BASE+(p), (b), (n))
 #define __do_insl(p, b, n)	readsl((PCI_IO_ADDR)_IO_BASE+(p), (b), (n))
 #define __do_outsb(p, b, n)	writesb((PCI_IO_ADDR)_IO_BASE+(p),(b),(n))
 #define __do_outsw(p, b, n)	writesw((PCI_IO_ADDR)_IO_BASE+(p),(b),(n))
 #define __do_outsl(p, b, n)	writesl((PCI_IO_ADDR)_IO_BASE+(p),(b),(n))
+#endif
 
 #define __do_memset_io(addr, c, n)	\
 				_memset_io(PCI_FIX_ADDR(addr), c, n)
@@ -689,6 +691,7 @@ static inline void name at					\
 #define writesb writesb
 #define writesw writesw
 #define writesl writesl
+
 #define inb inb
 #define inw inw
 #define inl inl
@@ -848,8 +851,16 @@ static inline void iosync(void)
 #define inl_p(port)             inl(port)
 #define outl_p(val, port)       (udelay(1), outl((val), (port)))
 
+#define insb_p			insb
+#define insw_p			insw
+#define insl_p			insl
+#define outsb_p			outsb
+#define outsw_p			outsw
+#define outsl_p			outsl
 
+#ifdef CONFIG_HAS_IOPORT
 #define IO_SPACE_LIMIT ~(0UL)
+#endif
 
 /**
  * ioremap     -   map bus memory into CPU space

@@ -20,12 +20,14 @@ DEF_PCI_AC_NORET(writeq, (u64 val, PCI_IO_ADDR addr), (val, addr), mem, addr)
 DEF_PCI_AC_NORET(writeq_be, (u64 val, PCI_IO_ADDR addr), (val, addr), mem, addr)
 #endif /* __powerpc64__ */
 
+#ifdef CONFIG_HAS_IOPORT
 DEF_PCI_AC_RET(inb, u8, (unsigned long port), (port), pio, port)
 DEF_PCI_AC_RET(inw, u16, (unsigned long port), (port), pio, port)
 DEF_PCI_AC_RET(inl, u32, (unsigned long port), (port), pio, port)
 DEF_PCI_AC_NORET(outb, (u8 val, unsigned long port), (val, port), pio, port)
 DEF_PCI_AC_NORET(outw, (u16 val, unsigned long port), (val, port), pio, port)
 DEF_PCI_AC_NORET(outl, (u32 val, unsigned long port), (val, port), pio, port)
+#endif
 
 DEF_PCI_AC_NORET(readsb, (const PCI_IO_ADDR a, void *b, unsigned long c),
 		 (a, b, c), mem, a)
@@ -40,6 +42,7 @@ DEF_PCI_AC_NORET(writesw, (PCI_IO_ADDR a, const void *b, unsigned long c),
 DEF_PCI_AC_NORET(writesl, (PCI_IO_ADDR a, const void *b, unsigned long c),
 		 (a, b, c), mem, a)
 
+#ifdef CONFIG_HAS_IOPORT
 DEF_PCI_AC_NORET(insb, (unsigned long p, void *b, unsigned long c),
 		 (p, b, c), pio, p)
 DEF_PCI_AC_NORET(insw, (unsigned long p, void *b, unsigned long c),
@@ -52,6 +55,7 @@ DEF_PCI_AC_NORET(outsw, (unsigned long p, const void *b, unsigned long c),
 		 (p, b, c), pio, p)
 DEF_PCI_AC_NORET(outsl, (unsigned long p, const void *b, unsigned long c),
 		 (p, b, c), pio, p)
+#endif
 
 DEF_PCI_AC_NORET(memset_io, (PCI_IO_ADDR a, int c, unsigned long n),
 		 (a, c, n), mem, a)

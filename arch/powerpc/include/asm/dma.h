@@ -3,6 +3,12 @@
 #define _ASM_POWERPC_DMA_H
 #ifdef __KERNEL__
 
+/* The maximum address that we can perform a DMA transfer to on this platform */
+/* Doesn't really apply... */
+#define MAX_DMA_ADDRESS		(~0UL)
+
+#ifdef CONFIG_HAS_IOPORT
+
 /*
  * Defines for using and allocating dma channels.
  * Written by Hennus Bergman, 1992.
@@ -25,10 +31,6 @@
 #ifndef MAX_DMA_CHANNELS
 #define MAX_DMA_CHANNELS	8
 #endif
-
-/* The maximum address that we can perform a DMA transfer to on this platform */
-/* Doesn't really apply... */
-#define MAX_DMA_ADDRESS		(~0UL)
 
 #ifdef HAVE_REALLY_SLOW_DMA_CONTROLLER
 #define dma_outb	outb_p
@@ -339,6 +341,8 @@ static __inline__ int get_dma_residue(unsigned int dmanr)
 extern int request_dma(unsigned int dmanr, const char *device_id);
 /* release it again */
 extern void free_dma(unsigned int dmanr);
+
+#endif
 
 #endif /* __KERNEL__ */
 #endif	/* _ASM_POWERPC_DMA_H */
