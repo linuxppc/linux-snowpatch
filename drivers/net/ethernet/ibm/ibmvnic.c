@@ -3208,7 +3208,7 @@ static void __ibmvnic_reset(struct work_struct *work)
 		    adapter->state == VNIC_REMOVED) {
 			spin_unlock_irqrestore(&adapter->state_lock, flags);
 			kfree(rwi);
-			rc = EBUSY;
+			rc = -EBUSY;
 			break;
 		}
 
