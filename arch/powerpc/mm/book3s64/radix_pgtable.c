@@ -31,6 +31,7 @@
 #include <asm/uaccess.h>
 #include <asm/ultravisor.h>
 #include <asm/set_memory.h>
+#include <asm/kfence.h>
 
 #include <trace/events/thp.h>
 
@@ -252,6 +253,53 @@ void radix__mark_initmem_nx(void)
 }
 #endif /* CONFIG_STRICT_KERNEL_RWX */
 
+#ifdef CONFIG_KFENCE
+static inline int radix_split_pmd_page(pmd_t *pmd, unsigned long addr)
+{
+	pte_t *pte = pte_alloc_one_kernel(&init_mm);
+	unsigned long pfn = PFN_DOWN(__pa(addr));
+	int i;
+
+	if (!pte)
+		return -ENOMEM;
+
+	for (i = 0; i < PTRS_PER_PTE; i++) {
+		__set_pte_at(&init_mm, addr, pte + i, pfn_pte(pfn + i, PAGE_KERNEL), 0);
+		asm volatile("ptesync": : :"memory");
+	}
+	pmd_populate_kernel(&init_mm, pmd, pte);
+
+	flush_tlb_kernel_range(addr, addr + PMD_SIZE);
+	return 0;
+}
+
+bool radix_kfence_init_pool(void)
+{
+	unsigned int page_psize, pmd_psize;
+	unsigned long addr;
+	pmd_t *pmd;
+
+	if (!kfence_alloc_pool_late())
+		return true;
+
+	page_psize = shift_to_mmu_psize(PAGE_SHIFT);
+	pmd_psize = shift_to_mmu_psize(PMD_SHIFT);
+	for (addr = (unsigned long)__kfence_pool; is_kfence_address((void *)addr);
+	     addr += PAGE_SIZE) {
+		pmd = pmd_off_k(addr);
+
+		if (pmd_leaf(*pmd)) {
+			if (radix_split_pmd_page(pmd, addr & PMD_MASK))
+				return false;
+			update_page_count(pmd_psize, -1);
+			update_page_count(page_psize, PTRS_PER_PTE);
+		}
+	}
+
+	return true;
+}
+#endif
+
 static inline void __meminit
 print_mapping(unsigned long start, unsigned long end, unsigned long size, bool exec)
 {
@@ -291,9 +339,8 @@ static unsigned long next_boundary(unsigned long addr, unsigned long end)
 	return end;
 }
 
-static int __meminit create_physical_mapping(unsigned long start,
-					     unsigned long end,
-					     int nid, pgprot_t _prot)
+static int __meminit create_physical_mapping(unsigned long start, unsigned long end, int nid,
+					     pgprot_t _prot, unsigned long mapping_sz_limit)
 {
 	unsigned long vaddr, addr, mapping_size = 0;
 	bool prev_exec, exec = false;
@@ -301,7 +348,10 @@ static int __meminit create_physical_mapping(unsigned long start,
 	int psize;
 	unsigned long max_mapping_size = memory_block_size;
 
-	if (debug_pagealloc_enabled_or_kfence())
+	if (mapping_sz_limit < max_mapping_size)
+		max_mapping_size = mapping_sz_limit;
+
+	if (debug_pagealloc_enabled())
 		max_mapping_size = PAGE_SIZE;
 
 	start = ALIGN(start, PAGE_SIZE);
@@ -358,12 +408,20 @@ static int __meminit create_physical_mapping(unsigned long start,
 
 static void __init radix_init_pgtable(void)
 {
+	phys_addr_t kfence_pool __maybe_unused;
 	unsigned long rts_field;
 	phys_addr_t start, end;
 	u64 i;
 
 	/* We don't support slb for radix */
 	slb_set_size(0);
+
+#ifdef CONFIG_KFENCE
+	if (kfence_early_init) {
+		kfence_pool = memblock_phys_alloc(KFENCE_POOL_SIZE, PAGE_SIZE);
+		memblock_mark_nomap(kfence_pool, KFENCE_POOL_SIZE);
+	}
+#endif
 
 	/*
 	 * Create the linear mapping
@@ -380,9 +438,18 @@ static void __init radix_init_pgtable(void)
 			continue;
 		}
 
-		WARN_ON(create_physical_mapping(start, end,
-						-1, PAGE_KERNEL));
+		WARN_ON(create_physical_mapping(start, end, -1, PAGE_KERNEL,
+						kfence_alloc_pool_late() ? PMD_SIZE : ~0UL));
 	}
+
+#ifdef CONFIG_KFENCE
+	if (kfence_early_init) {
+		create_physical_mapping(kfence_pool, kfence_pool + KFENCE_POOL_SIZE, -1,
+					PAGE_KERNEL, PAGE_SIZE);
+		memblock_clear_nomap(kfence_pool, KFENCE_POOL_SIZE);
+		__kfence_pool = __va(kfence_pool);
+	}
+#endif
 
 	if (!cpu_has_feature(CPU_FTR_HVMODE) &&
 			cpu_has_feature(CPU_FTR_P9_RADIX_PREFETCH_BUG)) {
@@ -874,8 +941,7 @@ int __meminit radix__create_section_mapping(unsigned long start,
 		return -1;
 	}
 
-	return create_physical_mapping(__pa(start), __pa(end),
-				       nid, prot);
+	return create_physical_mapping(__pa(start), __pa(end), nid, prot, ~0UL);
 }
 
 int __meminit radix__remove_section_mapping(unsigned long start, unsigned long end)

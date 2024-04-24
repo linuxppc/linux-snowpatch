@@ -8,6 +8,7 @@
 #ifndef __ASM_POWERPC_KFENCE_H
 #define __ASM_POWERPC_KFENCE_H
 
+#include <linux/kfence.h>
 #include <linux/mm.h>
 #include <asm/pgtable.h>
 
@@ -15,10 +16,26 @@
 #define ARCH_FUNC_PREFIX "."
 #endif
 
+#ifdef CONFIG_KFENCE
+extern bool kfence_early_init;
+
+static inline bool kfence_alloc_pool_late(void)
+{
+	return !kfence_early_init;
+}
+
 static inline bool arch_kfence_init_pool(void)
 {
+#ifdef CONFIG_PPC_BOOK3S_64
+	if (radix_enabled())
+		return radix_kfence_init_pool();
+#endif
+
 	return true;
 }
+#else
+static inline bool kfence_alloc_pool_late(void) { return false; }
+#endif
 
 #ifdef CONFIG_PPC64
 static inline bool kfence_protect_page(unsigned long addr, bool protect)
