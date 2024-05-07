@@ -976,7 +976,7 @@ int ehea_sense_port_attr(struct ehea_port *port)
 	u64 hret;
 	struct hcp_ehea_port_cb0 *cb0;
 
-	/* may be called via ehea_neq_tasklet() */
+	/* may be called via ehea_neq_work() */
 	cb0 = (void *)get_zeroed_page(GFP_ATOMIC);
 	if (!cb0) {
 		pr_err("no mem for cb0\n");
@@ -1216,9 +1216,9 @@ static void ehea_parse_eqe(struct ehea_adapter *adapter, u64 eqe)
 	}
 }
 
-static void ehea_neq_tasklet(struct tasklet_struct *t)
+static void ehea_neq_work(struct work_struct *t)
 {
-	struct ehea_adapter *adapter = from_tasklet(adapter, t, neq_tasklet);
+	struct ehea_adapter *adapter = from_work(adapter, t, neq_work);
 	struct ehea_eqe *eqe;
 	u64 event_mask;
 
@@ -1243,7 +1243,7 @@ static void ehea_neq_tasklet(struct tasklet_struct *t)
 static irqreturn_t ehea_interrupt_neq(int irq, void *param)
 {
 	struct ehea_adapter *adapter = param;
-	tasklet_hi_schedule(&adapter->neq_tasklet);
+	queue_work(system_bh_highpri_wq, &adapter->neq_work);
 	return IRQ_HANDLED;
 }
 
@@ -3423,7 +3423,7 @@ static int ehea_probe_adapter(struct platform_device *dev)
 		goto out_free_ad;
 	}
 
-	tasklet_setup(&adapter->neq_tasklet, ehea_neq_tasklet);
+	INIT_WORK(&adapter->neq_work, ehea_neq_work);
 
 	ret = ehea_create_device_sysfs(dev);
 	if (ret)
@@ -3444,7 +3444,7 @@ static int ehea_probe_adapter(struct platform_device *dev)
 	}
 
 	/* Handle any events that might be pending. */
-	tasklet_hi_schedule(&adapter->neq_tasklet);
+	queue_work(system_bh_highpri_wq, &adapter->neq_work);
 
 	ret = 0;
 	goto out;
@@ -3485,7 +3485,7 @@ static void ehea_remove(struct platform_device *dev)
 	ehea_remove_device_sysfs(dev);
 
 	ibmebus_free_irq(adapter->neq->attr.ist1, adapter);
-	tasklet_kill(&adapter->neq_tasklet);
+	cancel_work_sync(&adapter->neq_work);
 
 	ehea_destroy_eq(adapter->neq);
 	ehea_remove_adapter_mr(adapter);

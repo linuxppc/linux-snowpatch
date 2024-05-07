@@ -133,6 +133,7 @@
 #include <linux/dcache.h>
 #include <linux/ethtool.h>
 #include <linux/list.h>
+#include <linux/workqueue.h>
 
 #define XGBE_DRV_NAME		"amd-xgbe"
 #define XGBE_DRV_DESC		"AMD 10 Gigabit Ethernet Driver"
@@ -1298,11 +1299,11 @@ struct xgbe_prv_data {
 
 	unsigned int lpm_ctrl;		/* CTRL1 for resume */
 
-	unsigned int isr_as_tasklet;
-	struct tasklet_struct tasklet_dev;
-	struct tasklet_struct tasklet_ecc;
-	struct tasklet_struct tasklet_i2c;
-	struct tasklet_struct tasklet_an;
+	unsigned int isr_as_work;
+	struct work_struct work_dev;
+	struct work_struct work_ecc;
+	struct work_struct work_i2c;
+	struct work_struct work_an;
 
 	struct dentry *xgbe_debugfs;
 

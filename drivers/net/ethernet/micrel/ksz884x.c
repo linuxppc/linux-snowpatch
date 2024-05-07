@@ -26,6 +26,7 @@
 #include <linux/sched.h>
 #include <linux/slab.h>
 #include <linux/micrel_phy.h>
+#include <linux/workqueue.h>
 
 
 /* DMA Registers */
@@ -1339,8 +1340,8 @@ struct ksz_counter_info {
  * @mtu:		Current MTU used.  The default is REGULAR_RX_BUF_SIZE;
  * 			the maximum is MAX_RX_BUF_SIZE.
  * @opened:		Counter to keep track of device open.
- * @rx_tasklet:		Receive processing tasklet.
- * @tx_tasklet:		Transmit processing tasklet.
+ * @rx_work:		Receive processing work.
+ * @tx_work:		Transmit processing work.
  * @wol_enable:		Wake-on-LAN enable set by ethtool.
  * @wol_support:	Wake-on-LAN support used by ethtool.
  * @pme_wait:		Used for KSZ8841 power management.
@@ -1368,8 +1369,8 @@ struct dev_info {
 	int mtu;
 	int opened;
 
-	struct tasklet_struct rx_tasklet;
-	struct tasklet_struct tx_tasklet;
+	struct work_struct rx_work;
+	struct work_struct tx_work;
 
 	int wol_enable;
 	int wol_support;
@@ -4792,9 +4793,9 @@ release_packet:
 	return received;
 }
 
-static void rx_proc_task(struct tasklet_struct *t)
+static void rx_proc_task(struct work_struct *t)
 {
-	struct dev_info *hw_priv = from_tasklet(hw_priv, t, rx_tasklet);
+	struct dev_info *hw_priv = from_work(hw_priv, t, rx_work);
 	struct ksz_hw *hw = &hw_priv->hw;
 
 	if (!hw->enabled)
@@ -4804,26 +4805,26 @@ static void rx_proc_task(struct tasklet_struct *t)
 		/* In case receive process is suspended because of overrun. */
 		hw_resume_rx(hw);
 
-		/* tasklets are interruptible. */
+		/* works are interruptible. */
 		spin_lock_irq(&hw_priv->hwlock);
 		hw_turn_on_intr(hw, KS884X_INT_RX_MASK);
 		spin_unlock_irq(&hw_priv->hwlock);
 	} else {
 		hw_ack_intr(hw, KS884X_INT_RX);
-		tasklet_schedule(&hw_priv->rx_tasklet);
+		queue_work(system_bh_wq, &hw_priv->rx_work);
 	}
 }
 
-static void tx_proc_task(struct tasklet_struct *t)
+static void tx_proc_task(struct work_struct *t)
 {
-	struct dev_info *hw_priv = from_tasklet(hw_priv, t, tx_tasklet);
+	struct dev_info *hw_priv = from_work(hw_priv, t, tx_work);
 	struct ksz_hw *hw = &hw_priv->hw;
 
 	hw_ack_intr(hw, KS884X_INT_TX_MASK);
 
 	tx_done(hw_priv);
 
-	/* tasklets are interruptible. */
+	/* works are interruptible. */
 	spin_lock_irq(&hw_priv->hwlock);
 	hw_turn_on_intr(hw, KS884X_INT_TX);
 	spin_unlock_irq(&hw_priv->hwlock);
@@ -4879,12 +4880,12 @@ static irqreturn_t netdev_intr(int irq, void *dev_id)
 
 		if (unlikely(int_enable & KS884X_INT_TX_MASK)) {
 			hw_dis_intr_bit(hw, KS884X_INT_TX_MASK);
-			tasklet_schedule(&hw_priv->tx_tasklet);
+			queue_work(system_bh_wq, &hw_priv->tx_work);
 		}
 
 		if (likely(int_enable & KS884X_INT_RX)) {
 			hw_dis_intr_bit(hw, KS884X_INT_RX);
-			tasklet_schedule(&hw_priv->rx_tasklet);
+			queue_work(system_bh_wq, &hw_priv->rx_work);
 		}
 
 		if (unlikely(int_enable & KS884X_INT_RX_OVERRUN)) {
@@ -5013,11 +5014,11 @@ static int netdev_close(struct net_device *dev)
 		hw_disable(hw);
 		hw_clr_multicast(hw);
 
-		/* Delay for receive task to stop scheduling itself. */
+		/* Delay for receive work to stop scheduling itself. */
 		msleep(2000 / HZ);
 
-		tasklet_kill(&hw_priv->rx_tasklet);
-		tasklet_kill(&hw_priv->tx_tasklet);
+		cancel_work_sync(&hw_priv->rx_work);
+		cancel_work_sync(&hw_priv->tx_work);
 		free_irq(dev->irq, hw_priv->dev);
 
 		transmit_cleanup(hw_priv, 0);
@@ -5068,8 +5069,8 @@ static int prepare_hardware(struct net_device *dev)
 	rc = request_irq(dev->irq, netdev_intr, IRQF_SHARED, dev->name, dev);
 	if (rc)
 		return rc;
-	tasklet_setup(&hw_priv->rx_tasklet, rx_proc_task);
-	tasklet_setup(&hw_priv->tx_tasklet, tx_proc_task);
+	INIT_WORK(&hw_priv->rx_work, rx_proc_task);
+	INIT_WORK(&hw_priv->tx_work, tx_proc_task);
 
 	hw->promiscuous = 0;
 	hw->all_multi = 0;

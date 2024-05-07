@@ -11,6 +11,7 @@
 #include <linux/etherdevice.h>
 #include <linux/capability.h>
 #include <linux/net_tstamp.h>
+#include <linux/workqueue.h>
 #include <linux/interrupt.h>
 #include <linux/netdevice.h>
 #include <linux/spinlock.h>
@@ -144,7 +145,7 @@ struct octeon_mgmt {
 	unsigned int last_speed;
 	struct device *dev;
 	struct napi_struct napi;
-	struct tasklet_struct tx_clean_tasklet;
+	struct work_struct tx_clean_work;
 	struct device_node *phy_np;
 	resource_size_t mix_phys;
 	resource_size_t mix_size;
@@ -315,9 +316,9 @@ static void octeon_mgmt_clean_tx_buffers(struct octeon_mgmt *p)
 		netif_wake_queue(p->netdev);
 }
 
-static void octeon_mgmt_clean_tx_tasklet(struct tasklet_struct *t)
+static void octeon_mgmt_clean_tx_work(struct work_struct *t)
 {
-	struct octeon_mgmt *p = from_tasklet(p, t, tx_clean_tasklet);
+	struct octeon_mgmt *p = from_work(p, t, tx_clean_work);
 	octeon_mgmt_clean_tx_buffers(p);
 	octeon_mgmt_enable_tx_irq(p);
 }
@@ -684,7 +685,7 @@ static irqreturn_t octeon_mgmt_interrupt(int cpl, void *dev_id)
 	}
 	if (mixx_isr.s.orthresh) {
 		octeon_mgmt_disable_tx_irq(p);
-		tasklet_schedule(&p->tx_clean_tasklet);
+		queue_work(system_bh_wq, &p->tx_clean_work);
 	}
 
 	return IRQ_HANDLED;
@@ -1487,8 +1488,7 @@ static int octeon_mgmt_probe(struct platform_device *pdev)
 
 	skb_queue_head_init(&p->tx_list);
 	skb_queue_head_init(&p->rx_list);
-	tasklet_setup(&p->tx_clean_tasklet,
-		      octeon_mgmt_clean_tx_tasklet);
+	INIT_WORK(&p->tx_clean_work, octeon_mgmt_clean_tx_work);
 
 	netdev->priv_flags |= IFF_UNICAST_FLT;
 

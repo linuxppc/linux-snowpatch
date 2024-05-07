@@ -21,6 +21,7 @@
 #include <linux/firmware.h>
 #include <net/vxlan.h>
 #include <linux/kthread.h>
+#include <linux/workqueue.h>
 #include "liquidio_common.h"
 #include "octeon_droq.h"
 #include "octeon_iq.h"
@@ -156,12 +157,12 @@ static int liquidio_set_vf_link_state(struct net_device *netdev, int vfidx,
 static struct handshake handshake[MAX_OCTEON_DEVICES];
 static struct completion first_stage;
 
-static void octeon_droq_bh(struct tasklet_struct *t)
+static void octeon_droq_bh(struct work_struct *t)
 {
 	int q_no;
 	int reschedule = 0;
-	struct octeon_device_priv *oct_priv = from_tasklet(oct_priv, t,
-							  droq_tasklet);
+	struct octeon_device_priv *oct_priv = from_work(oct_priv, t,
+							  droq_work);
 	struct octeon_device *oct = oct_priv->dev;
 
 	for (q_no = 0; q_no < MAX_OCTEON_OUTPUT_QUEUES(oct); q_no++) {
@@ -186,7 +187,7 @@ static void octeon_droq_bh(struct tasklet_struct *t)
 	}
 
 	if (reschedule)
-		tasklet_schedule(&oct_priv->droq_tasklet);
+		queue_work(system_bh_wq, &oct_priv->droq_work);
 }
 
 static int lio_wait_for_oq_pkts(struct octeon_device *oct)
@@ -205,7 +206,7 @@ static int lio_wait_for_oq_pkts(struct octeon_device *oct)
 		}
 		if (pkt_cnt > 0) {
 			pending_pkts += pkt_cnt;
-			tasklet_schedule(&oct_priv->droq_tasklet);
+			queue_work(system_bh_wq, &oct_priv->droq_work);
 		}
 		pkt_cnt = 0;
 		schedule_timeout_uninterruptible(1);
@@ -1136,7 +1137,7 @@ static void octeon_destroy_resources(struct octeon_device *oct)
 		break;
 	}                       /* end switch (oct->status) */
 
-	tasklet_kill(&oct_priv->droq_tasklet);
+	cancel_work_sync(&oct_priv->droq_work);
 }
 
 /**
@@ -1240,7 +1241,7 @@ static void liquidio_destroy_nic_device(struct octeon_device *oct, int ifidx)
 	list_for_each_entry_safe(napi, n, &netdev->napi_list, dev_list)
 		netif_napi_del(napi);
 
-	tasklet_enable(&oct_priv->droq_tasklet);
+	enable_and_queue_work(system_bh_wq, &oct_priv->droq_work);
 
 	if (atomic_read(&lio->ifstate) & LIO_IFSTATE_REGISTERED)
 		unregister_netdev(netdev);
@@ -1776,7 +1777,7 @@ static int liquidio_open(struct net_device *netdev)
 	int ret = 0;
 
 	if (oct->props[lio->ifidx].napi_enabled == 0) {
-		tasklet_disable(&oct_priv->droq_tasklet);
+		disable_work_sync(&oct_priv->droq_work);
 
 		list_for_each_entry_safe(napi, n, &netdev->napi_list, dev_list)
 			napi_enable(napi);
@@ -1902,7 +1903,7 @@ static int liquidio_stop(struct net_device *netdev)
 		if (OCTEON_CN23XX_PF(oct))
 			oct->droq[0]->ops.poll_mode = 0;
 
-		tasklet_enable(&oct_priv->droq_tasklet);
+		enable_and_queue_work(system_bh_wq, &oct_priv->droq_work);
 	}
 
 	dev_info(&oct->pci_dev->dev, "%s interface is stopped\n", netdev->name);
@@ -4210,9 +4211,9 @@ static int octeon_device_init(struct octeon_device *octeon_dev)
 		}
 	}
 
-	/* Initialize the tasklet that handles output queue packet processing.*/
-	dev_dbg(&octeon_dev->pci_dev->dev, "Initializing droq tasklet\n");
-	tasklet_setup(&oct_priv->droq_tasklet, octeon_droq_bh);
+	/* Initialize the work that handles output queue packet processing.*/
+	dev_dbg(&octeon_dev->pci_dev->dev, "Initializing droq work\n");
+	INIT_WORK(&oct_priv->droq_work, octeon_droq_bh);
 
 	/* Setup the interrupt handler and record the INT SUM register address
 	 */

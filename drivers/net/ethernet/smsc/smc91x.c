@@ -245,7 +245,7 @@ static void smc_reset(struct net_device *dev)
 
 	DBG(2, dev, "%s\n", __func__);
 
-	/* Disable all interrupts, block TX tasklet */
+	/* Disable all interrupts, block TX work */
 	spin_lock_irq(&lp->lock);
 	SMC_SELECT_BANK(lp, 2);
 	SMC_SET_INT_MASK(lp, 0);
@@ -356,7 +356,7 @@ static void smc_enable(struct net_device *dev)
 	/*
 	 * From this point the register bank must _NOT_ be switched away
 	 * to something else than bank 2 without proper locking against
-	 * races with any tasklet or interrupt handlers until smc_shutdown()
+	 * races with any work or interrupt handlers until smc_shutdown()
 	 * or smc_reset() is called.
 	 */
 }
@@ -536,9 +536,9 @@ static inline void  smc_rcv(struct net_device *dev)
 /*
  * This is called to actually send a packet to the chip.
  */
-static void smc_hardware_send_pkt(struct tasklet_struct *t)
+static void smc_hardware_send_pkt(struct work_struct *t)
 {
-	struct smc_local *lp = from_tasklet(lp, t, tx_task);
+	struct smc_local *lp = from_work(lp, t, tx_task);
 	struct net_device *dev = lp->dev;
 	void __iomem *ioaddr = lp->base;
 	struct sk_buff *skb;
@@ -550,7 +550,7 @@ static void smc_hardware_send_pkt(struct tasklet_struct *t)
 
 	if (!smc_special_trylock(&lp->lock, flags)) {
 		netif_stop_queue(dev);
-		tasklet_schedule(&lp->tx_task);
+		queue_work(system_bh_wq, &lp->tx_task);
 		return;
 	}
 
@@ -1248,7 +1248,7 @@ static irqreturn_t smc_interrupt(int irq, void *dev_id)
 			smc_rcv(dev);
 		} else if (status & IM_ALLOC_INT) {
 			DBG(3, dev, "Allocation irq\n");
-			tasklet_hi_schedule(&lp->tx_task);
+			queue_work(system_bh_highpri_wq, &lp->tx_task);
 			mask &= ~IM_ALLOC_INT;
 		} else if (status & IM_TX_EMPTY_INT) {
 			DBG(3, dev, "TX empty\n");
@@ -1515,7 +1515,7 @@ static int smc_close(struct net_device *dev)
 
 	/* clear everything */
 	smc_shutdown(dev);
-	tasklet_kill(&lp->tx_task);
+	cancel_work_sync(&lp->tx_task);
 	smc_phy_powerdown(dev);
 	return 0;
 }
@@ -1968,7 +1968,7 @@ static int smc_probe(struct net_device *dev, void __iomem *ioaddr,
 	dev->netdev_ops = &smc_netdev_ops;
 	dev->ethtool_ops = &smc_ethtool_ops;
 
-	tasklet_setup(&lp->tx_task, smc_hardware_send_pkt);
+	INIT_WORK(&lp->tx_task, smc_hardware_send_pkt);
 	INIT_WORK(&lp->phy_configure, smc_phy_configure);
 	lp->dev = dev;
 	lp->mii.phy_id_mask = 0x1f;

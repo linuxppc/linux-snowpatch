@@ -148,7 +148,7 @@ out:
 	eq_update_ci(eq, 1);
 
 	if (cqn != -1)
-		tasklet_schedule(&eq_comp->tasklet_ctx.task);
+		queue_work(system_bh_wq, &eq_comp->work_ctx.work);
 
 	return 0;
 }
@@ -979,7 +979,7 @@ static void destroy_comp_eq(struct mlx5_core_dev *dev, struct mlx5_eq_comp *eq, 
 	if (destroy_unmap_eq(dev, &eq->core))
 		mlx5_core_warn(dev, "failed to destroy comp EQ 0x%x\n",
 			       eq->core.eqn);
-	tasklet_disable(&eq->tasklet_ctx.task);
+	disable_work_sync(&eq->work_ctx.work);
 	kfree(eq);
 	comp_irq_release(dev, vecidx);
 	table->curr_comp_eqs--;
@@ -1029,10 +1029,10 @@ static int create_comp_eq(struct mlx5_core_dev *dev, u16 vecidx)
 		goto clean_irq;
 	}
 
-	INIT_LIST_HEAD(&eq->tasklet_ctx.list);
-	INIT_LIST_HEAD(&eq->tasklet_ctx.process_list);
-	spin_lock_init(&eq->tasklet_ctx.lock);
-	tasklet_setup(&eq->tasklet_ctx.task, mlx5_cq_tasklet_cb);
+	INIT_LIST_HEAD(&eq->work_ctx.list);
+	INIT_LIST_HEAD(&eq->work_ctx.process_list);
+	spin_lock_init(&eq->work_ctx.lock);
+	INIT_WORK(&eq->work_ctx.work, mlx5_cq_work_cb);
 
 	irq = xa_load(&table->comp_irqs, vecidx);
 	eq->irq_nb.notifier_call = mlx5_eq_comp_int;

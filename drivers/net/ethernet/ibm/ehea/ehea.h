@@ -20,6 +20,7 @@
 #include <linux/vmalloc.h>
 #include <linux/if_vlan.h>
 #include <linux/platform_device.h>
+#include <linux/workqueue.h>
 
 #include <asm/ibmebus.h>
 #include <asm/io.h>
@@ -381,7 +382,7 @@ struct ehea_adapter {
 	struct platform_device *ofdev;
 	struct ehea_port *port[EHEA_MAX_PORTS];
 	struct ehea_eq *neq;       /* notification event queue */
-	struct tasklet_struct neq_tasklet;
+	struct work_struct neq_work;
 	struct ehea_mr mr;
 	u32 pd;                    /* protection domain */
 	u64 max_mc_mac;            /* max number of multicast mac addresses */

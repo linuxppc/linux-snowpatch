@@ -339,7 +339,7 @@ struct nfp_net_rx_ring {
  * struct nfp_net_r_vector - Per ring interrupt vector configuration
  * @nfp_net:        Backpointer to nfp_net structure
  * @napi:           NAPI structure for this ring vec
- * @tasklet:        ctrl vNIC, tasklet for servicing the r_vec
+ * @work:        ctrl vNIC, work for servicing the r_vec
  * @queue:          ctrl vNIC, send queue
  * @lock:           ctrl vNIC, r_vec lock protects @queue
  * @tx_ring:        Pointer to TX ring
@@ -389,7 +389,7 @@ struct nfp_net_r_vector {
 	union {
 		struct napi_struct napi;
 		struct {
-			struct tasklet_struct tasklet;
+			struct work_struct work;
 			struct sk_buff_head queue;
 			spinlock_t lock;
 		};

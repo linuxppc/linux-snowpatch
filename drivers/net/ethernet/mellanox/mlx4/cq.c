@@ -52,23 +52,23 @@
 #define MLX4_CQ_STATE_ARMED_SOL		( 6 <<  8)
 #define MLX4_EQ_STATE_FIRED		(10 <<  8)
 
-#define TASKLET_MAX_TIME 2
-#define TASKLET_MAX_TIME_JIFFIES msecs_to_jiffies(TASKLET_MAX_TIME)
+#define BH_WORK_MAX_TIME 2
+#define BH_WORK_MAX_TIME_JIFFIES msecs_to_jiffies(BH_WORK_MAX_TIME)
 
-void mlx4_cq_tasklet_cb(struct tasklet_struct *t)
+void mlx4_cq_work_cb(struct work_struct *t)
 {
 	unsigned long flags;
-	unsigned long end = jiffies + TASKLET_MAX_TIME_JIFFIES;
-	struct mlx4_eq_tasklet *ctx = from_tasklet(ctx, t, task);
+	unsigned long end = jiffies + BH_WORK_MAX_TIME_JIFFIES;
+	struct mlx4_eq_work *ctx = from_work(ctx, t, work);
 	struct mlx4_cq *mcq, *temp;
 
 	spin_lock_irqsave(&ctx->lock, flags);
 	list_splice_tail_init(&ctx->list, &ctx->process_list);
 	spin_unlock_irqrestore(&ctx->lock, flags);
 
-	list_for_each_entry_safe(mcq, temp, &ctx->process_list, tasklet_ctx.list) {
-		list_del_init(&mcq->tasklet_ctx.list);
-		mcq->tasklet_ctx.comp(mcq);
+	list_for_each_entry_safe(mcq, temp, &ctx->process_list, work_ctx.list) {
+		list_del_init(&mcq->work_ctx.list);
+		mcq->work_ctx.comp(mcq);
 		if (refcount_dec_and_test(&mcq->refcount))
 			complete(&mcq->free);
 		if (time_after(jiffies, end))
@@ -76,29 +76,29 @@ void mlx4_cq_tasklet_cb(struct tasklet_struct *t)
 	}
 
 	if (!list_empty(&ctx->process_list))
-		tasklet_schedule(&ctx->task);
+		queue_work(system_bh_wq, &ctx->work);
 }
 
-static void mlx4_add_cq_to_tasklet(struct mlx4_cq *cq)
+static void mlx4_add_cq_to_work(struct mlx4_cq *cq)
 {
-	struct mlx4_eq_tasklet *tasklet_ctx = cq->tasklet_ctx.priv;
+	struct mlx4_eq_work *work_ctx = cq->work_ctx.priv;
 	unsigned long flags;
 	bool kick;
 
-	spin_lock_irqsave(&tasklet_ctx->lock, flags);
+	spin_lock_irqsave(&work_ctx->lock, flags);
 	/* When migrating CQs between EQs will be implemented, please note
 	 * that you need to sync this point. It is possible that
 	 * while migrating a CQ, completions on the old EQs could
 	 * still arrive.
 	 */
-	if (list_empty_careful(&cq->tasklet_ctx.list)) {
+	if (list_empty_careful(&cq->work_ctx.list)) {
 		refcount_inc(&cq->refcount);
-		kick = list_empty(&tasklet_ctx->list);
-		list_add_tail(&cq->tasklet_ctx.list, &tasklet_ctx->list);
+		kick = list_empty(&work_ctx->list);
+		list_add_tail(&cq->work_ctx.list, &work_ctx->list);
 		if (kick)
-			tasklet_schedule(&tasklet_ctx->task);
+			queue_work(system_bh_wq, &work_ctx->work);
 	}
-	spin_unlock_irqrestore(&tasklet_ctx->lock, flags);
+	spin_unlock_irqrestore(&work_ctx->lock, flags);
 }
 
 void mlx4_cq_completion(struct mlx4_dev *dev, u32 cqn)
@@ -412,10 +412,10 @@ int mlx4_cq_alloc(struct mlx4_dev *dev, int nent,
 	cq->uar        = uar;
 	refcount_set(&cq->refcount, 1);
 	init_completion(&cq->free);
-	cq->comp = mlx4_add_cq_to_tasklet;
-	cq->tasklet_ctx.priv =
-		&priv->eq_table.eq[MLX4_CQ_TO_EQ_VECTOR(vector)].tasklet_ctx;
-	INIT_LIST_HEAD(&cq->tasklet_ctx.list);
+	cq->comp = mlx4_add_cq_to_work;
+	cq->work_ctx.priv =
+		&priv->eq_table.eq[MLX4_CQ_TO_EQ_VECTOR(vector)].work_ctx;
+	INIT_LIST_HEAD(&cq->work_ctx.list);
 
 
 	cq->irq = priv->eq_table.eq[MLX4_CQ_TO_EQ_VECTOR(vector)].irq;

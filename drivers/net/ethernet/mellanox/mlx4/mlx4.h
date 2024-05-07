@@ -54,6 +54,7 @@
 #include <linux/mlx4/driver.h>
 #include <linux/mlx4/doorbell.h>
 #include <linux/mlx4/cmd.h>
+#include <linux/workqueue.h>
 #include "fw_qos.h"
 
 #define DRV_NAME	"mlx4_core"
@@ -382,11 +383,11 @@ struct mlx4_srq_context {
 	__be64			db_rec_addr;
 };
 
-struct mlx4_eq_tasklet {
+struct mlx4_eq_work {
 	struct list_head list;
 	struct list_head process_list;
-	struct tasklet_struct task;
-	/* lock on completion tasklet list */
+	struct work_struct work;
+	/* lock on completion work list */
 	spinlock_t lock;
 };
 
@@ -400,7 +401,7 @@ struct mlx4_eq {
 	int			nent;
 	struct mlx4_buf_list   *page_list;
 	struct mlx4_mtt		mtt;
-	struct mlx4_eq_tasklet	tasklet_ctx;
+	struct mlx4_eq_work	work_ctx;
 	struct mlx4_active_ports actv_ports;
 	u32			ref_count;
 	cpumask_var_t		affinity_mask;
@@ -1228,7 +1229,7 @@ void mlx4_cmd_use_polling(struct mlx4_dev *dev);
 int mlx4_comm_cmd(struct mlx4_dev *dev, u8 cmd, u16 param,
 		  u16 op, unsigned long timeout);
 
-void mlx4_cq_tasklet_cb(struct tasklet_struct *t);
+void mlx4_cq_work_cb(struct work_struct *t);
 void mlx4_cq_completion(struct mlx4_dev *dev, u32 cqn);
 void mlx4_cq_event(struct mlx4_dev *dev, u32 cqn, int event_type);
 

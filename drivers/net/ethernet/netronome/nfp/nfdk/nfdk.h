@@ -6,6 +6,7 @@
 
 #include <linux/bitops.h>
 #include <linux/types.h>
+#include <linux/workqueue.h>
 
 #define NFDK_TX_DESC_PER_SIMPLE_PKT	2
 
@@ -122,7 +123,7 @@ netdev_tx_t nfp_nfdk_tx(struct sk_buff *skb, struct net_device *netdev);
 bool
 nfp_nfdk_ctrl_tx_one(struct nfp_net *nn, struct nfp_net_r_vector *r_vec,
 		     struct sk_buff *skb, bool old);
-void nfp_nfdk_ctrl_poll(struct tasklet_struct *t);
+void nfp_nfdk_ctrl_poll(struct work_struct *t);
 void nfp_nfdk_rx_ring_fill_freelist(struct nfp_net_dp *dp,
 				    struct nfp_net_rx_ring *rx_ring);
 #ifndef CONFIG_NFP_NET_IPSEC

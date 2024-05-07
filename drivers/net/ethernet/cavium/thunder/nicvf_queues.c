@@ -8,6 +8,7 @@
 #include <linux/ip.h>
 #include <linux/etherdevice.h>
 #include <linux/iommu.h>
+#include <linux/workqueue.h>
 #include <net/ip.h>
 #include <net/tso.h>
 #include <uapi/linux/bpf.h>
@@ -461,9 +462,9 @@ void nicvf_rbdr_work(struct work_struct *work)
 }
 
 /* In Softirq context, alloc rcv buffers in atomic mode */
-void nicvf_rbdr_task(struct tasklet_struct *t)
+void nicvf_rbdr_task(struct work_struct *t)
 {
-	struct nicvf *nic = from_tasklet(nic, t, rbdr_task);
+	struct nicvf *nic = from_work(nic, t, rbdr_task);
 
 	nicvf_refill_rbdr(nic, GFP_ATOMIC);
 	if (nic->rb_alloc_fail) {

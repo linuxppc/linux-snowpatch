@@ -415,7 +415,7 @@ struct ns83820 {
 	struct net_device	*ndev;
 
 	struct rx_info		rx_info;
-	struct tasklet_struct	rx_tasklet;
+	struct work_struct	rx_work;
 
 	unsigned		ihr;
 	struct work_struct	tq_refill;
@@ -925,9 +925,9 @@ out:
 	spin_unlock_irqrestore(&info->lock, flags);
 }
 
-static void rx_action(struct tasklet_struct *t)
+static void rx_action(struct work_struct *t)
 {
-	struct ns83820 *dev = from_tasklet(dev, t, rx_tasklet);
+	struct ns83820 *dev = from_work(dev, t, rx_work);
 	struct net_device *ndev = dev->ndev;
 	rx_irq(ndev);
 	writel(ihr, dev->base + IHR);
@@ -1426,7 +1426,7 @@ static void ns83820_do_isr(struct net_device *ndev, u32 isr)
 		writel(dev->IMR_cache, dev->base + IMR);
 		spin_unlock_irqrestore(&dev->misc_lock, flags);
 
-		tasklet_schedule(&dev->rx_tasklet);
+		queue_work(system_bh_wq, &dev->rx_work);
 		//rx_irq(ndev);
 		//writel(4, dev->base + IHR);
 	}
@@ -1929,7 +1929,7 @@ static int ns83820_init_one(struct pci_dev *pci_dev,
 	SET_NETDEV_DEV(ndev, &pci_dev->dev);
 
 	INIT_WORK(&dev->tq_refill, queue_refill);
-	tasklet_setup(&dev->rx_tasklet, rx_action);
+	INIT_WORK(&dev->rx_work, rx_action);
 
 	err = pci_enable_device(pci_dev);
 	if (err) {

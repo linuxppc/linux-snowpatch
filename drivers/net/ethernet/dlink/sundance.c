@@ -97,6 +97,7 @@ static char *media[MAX_UNITS];
 #include <linux/crc32.h>
 #include <linux/ethtool.h>
 #include <linux/mii.h>
+#include <linux/workqueue.h>
 
 MODULE_AUTHOR("Donald Becker <becker@scyld.com>");
 MODULE_DESCRIPTION("Sundance Alta Ethernet driver");
@@ -395,8 +396,8 @@ struct netdev_private {
 	unsigned int an_enable:1;
 	unsigned int speed;
 	unsigned int wol_enabled:1;			/* Wake on LAN enabled */
-	struct tasklet_struct rx_tasklet;
-	struct tasklet_struct tx_tasklet;
+	struct work_struct rx_work;
+	struct work_struct tx_work;
 	int budget;
 	int cur_task;
 	/* Multicast and receive mode. */
@@ -430,8 +431,8 @@ static void init_ring(struct net_device *dev);
 static netdev_tx_t start_tx(struct sk_buff *skb, struct net_device *dev);
 static int reset_tx (struct net_device *dev);
 static irqreturn_t intr_handler(int irq, void *dev_instance);
-static void rx_poll(struct tasklet_struct *t);
-static void tx_poll(struct tasklet_struct *t);
+static void rx_poll(struct work_struct *t);
+static void tx_poll(struct work_struct *t);
 static void refill_rx (struct net_device *dev);
 static void netdev_error(struct net_device *dev, int intr_status);
 static void netdev_error(struct net_device *dev, int intr_status);
@@ -541,8 +542,8 @@ static int sundance_probe1(struct pci_dev *pdev,
 	np->msg_enable = (1 << debug) - 1;
 	spin_lock_init(&np->lock);
 	spin_lock_init(&np->statlock);
-	tasklet_setup(&np->rx_tasklet, rx_poll);
-	tasklet_setup(&np->tx_tasklet, tx_poll);
+	INIT_WORK(&np->rx_work, rx_poll);
+	INIT_WORK(&np->tx_work, tx_poll);
 
 	ring_space = dma_alloc_coherent(&pdev->dev, TX_TOTAL_SIZE,
 			&ring_dma, GFP_KERNEL);
@@ -965,7 +966,7 @@ static void tx_timeout(struct net_device *dev, unsigned int txqueue)
 	unsigned long flag;
 
 	netif_stop_queue(dev);
-	tasklet_disable_in_atomic(&np->tx_tasklet);
+	disable_work_sync(&np->tx_work);
 	iowrite16(0, ioaddr + IntrEnable);
 	printk(KERN_WARNING "%s: Transmit timed out, TxStatus %2.2x "
 		   "TxFrameId %2.2x,"
@@ -1006,7 +1007,7 @@ static void tx_timeout(struct net_device *dev, unsigned int txqueue)
 		netif_wake_queue(dev);
 	}
 	iowrite16(DEFAULT_INTR, ioaddr + IntrEnable);
-	tasklet_enable(&np->tx_tasklet);
+	enable_and_queue_work(system_bh_wq, &np->tx_work);
 }
 
 
@@ -1058,9 +1059,9 @@ static void init_ring(struct net_device *dev)
 	}
 }
 
-static void tx_poll(struct tasklet_struct *t)
+static void tx_poll(struct work_struct *t)
 {
-	struct netdev_private *np = from_tasklet(np, t, tx_tasklet);
+	struct netdev_private *np = from_work(np, t, tx_work);
 	unsigned head = np->cur_task % TX_RING_SIZE;
 	struct netdev_desc *txdesc =
 		&np->tx_ring[(np->cur_tx - 1) % TX_RING_SIZE];
@@ -1104,11 +1105,11 @@ start_tx (struct sk_buff *skb, struct net_device *dev)
 			goto drop_frame;
 	txdesc->frag.length = cpu_to_le32 (skb->len | LastFrag);
 
-	/* Increment cur_tx before tasklet_schedule() */
+	/* Increment cur_tx before queue_work(system_bh_wq, ) */
 	np->cur_tx++;
 	mb();
-	/* Schedule a tx_poll() task */
-	tasklet_schedule(&np->tx_tasklet);
+	/* Schedule a tx_poll() work */
+	queue_work(system_bh_wq, &np->tx_work);
 
 	/* On some architectures: explicitly flush cache lines here. */
 	if (np->cur_tx - np->dirty_tx < TX_QUEUE_LEN - 1 &&
@@ -1199,7 +1200,7 @@ static irqreturn_t intr_handler(int irq, void *dev_instance)
 					ioaddr + IntrEnable);
 			if (np->budget < 0)
 				np->budget = RX_BUDGET;
-			tasklet_schedule(&np->rx_tasklet);
+			queue_work(system_bh_wq, &np->rx_work);
 		}
 		if (intr_status & (IntrTxDone | IntrDrvRqst)) {
 			tx_status = ioread16 (ioaddr + TxStatus);
@@ -1315,9 +1316,9 @@ static irqreturn_t intr_handler(int irq, void *dev_instance)
 	return IRQ_RETVAL(handled);
 }
 
-static void rx_poll(struct tasklet_struct *t)
+static void rx_poll(struct work_struct *t)
 {
-	struct netdev_private *np = from_tasklet(np, t, rx_tasklet);
+	struct netdev_private *np = from_work(np, t, rx_work);
 	struct net_device *dev = np->ndev;
 	int entry = np->cur_rx % RX_RING_SIZE;
 	int boguscnt = np->budget;
@@ -1407,7 +1408,7 @@ not_done:
 	np->budget -= received;
 	if (np->budget <= 0)
 		np->budget = RX_BUDGET;
-	tasklet_schedule(&np->rx_tasklet);
+	queue_work(system_bh_wq, &np->rx_work);
 }
 
 static void refill_rx (struct net_device *dev)
@@ -1819,9 +1820,9 @@ static int netdev_close(struct net_device *dev)
 	struct sk_buff *skb;
 	int i;
 
-	/* Wait and kill tasklet */
-	tasklet_kill(&np->rx_tasklet);
-	tasklet_kill(&np->tx_tasklet);
+	/* Wait and kill work */
+	cancel_work_sync(&np->rx_work);
+	cancel_work_sync(&np->tx_work);
 	np->cur_tx = 0;
 	np->dirty_tx = 0;
 	np->cur_task = 0;

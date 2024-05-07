@@ -982,9 +982,9 @@ static int nicvf_poll(struct napi_struct *napi, int budget)
  *
  * As of now only CQ errors are handled
  */
-static void nicvf_handle_qs_err(struct tasklet_struct *t)
+static void nicvf_handle_qs_err(struct work_struct *t)
 {
-	struct nicvf *nic = from_tasklet(nic, t, qs_err_task);
+	struct nicvf *nic = from_work(nic, t, qs_err_task);
 	struct queue_set *qs = nic->qs;
 	int qidx;
 	u64 status;
@@ -1069,7 +1069,7 @@ static irqreturn_t nicvf_rbdr_intr_handler(int irq, void *nicvf_irq)
 		if (!nicvf_is_intr_enabled(nic, NICVF_INTR_RBDR, qidx))
 			continue;
 		nicvf_disable_intr(nic, NICVF_INTR_RBDR, qidx);
-		tasklet_hi_schedule(&nic->rbdr_task);
+		queue_work(system_bh_highpri_wq, &nic->rbdr_task);
 		/* Clear interrupt */
 		nicvf_clear_intr(nic, NICVF_INTR_RBDR, qidx);
 	}
@@ -1085,7 +1085,7 @@ static irqreturn_t nicvf_qs_err_intr_handler(int irq, void *nicvf_irq)
 
 	/* Disable Qset err interrupt and schedule softirq */
 	nicvf_disable_intr(nic, NICVF_INTR_QS_ERR, 0);
-	tasklet_hi_schedule(&nic->qs_err_task);
+	queue_work(system_bh_highpri_wq, &nic->qs_err_task);
 	nicvf_clear_intr(nic, NICVF_INTR_QS_ERR, 0);
 
 	return IRQ_HANDLED;
@@ -1364,8 +1364,8 @@ int nicvf_stop(struct net_device *netdev)
 	for (irq = 0; irq < nic->num_vec; irq++)
 		synchronize_irq(pci_irq_vector(nic->pdev, irq));
 
-	tasklet_kill(&nic->rbdr_task);
-	tasklet_kill(&nic->qs_err_task);
+	cancel_work_sync(&nic->rbdr_task);
+	cancel_work_sync(&nic->qs_err_task);
 	if (nic->rb_work_scheduled)
 		cancel_delayed_work_sync(&nic->rbdr_work);
 
@@ -1488,11 +1488,11 @@ int nicvf_open(struct net_device *netdev)
 		nicvf_hw_set_mac_addr(nic, netdev);
 	}
 
-	/* Init tasklet for handling Qset err interrupt */
-	tasklet_setup(&nic->qs_err_task, nicvf_handle_qs_err);
+	/* Init work for handling Qset err interrupt */
+	INIT_WORK(&nic->qs_err_task, nicvf_handle_qs_err);
 
-	/* Init RBDR tasklet which will refill RBDR */
-	tasklet_setup(&nic->rbdr_task, nicvf_rbdr_task);
+	/* Init RBDR work which will refill RBDR */
+	INIT_WORK(&nic->rbdr_task, nicvf_rbdr_task);
 	INIT_DELAYED_WORK(&nic->rbdr_work, nicvf_rbdr_work);
 
 	/* Configure CPI alorithm */
@@ -1561,8 +1561,8 @@ int nicvf_open(struct net_device *netdev)
 cleanup:
 	nicvf_disable_intr(nic, NICVF_INTR_MBOX, 0);
 	nicvf_unregister_interrupts(nic);
-	tasklet_kill(&nic->qs_err_task);
-	tasklet_kill(&nic->rbdr_task);
+	cancel_work_sync(&nic->qs_err_task);
+	cancel_work_sync(&nic->rbdr_task);
 napi_del:
 	for (qidx = 0; qidx < qs->cq_cnt; qidx++) {
 		cq_poll = nic->napi[qidx];

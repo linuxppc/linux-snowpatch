@@ -1055,10 +1055,10 @@ static int mlx4_create_eq(struct mlx4_dev *dev, int nent,
 
 	eq->cons_index = 0;
 
-	INIT_LIST_HEAD(&eq->tasklet_ctx.list);
-	INIT_LIST_HEAD(&eq->tasklet_ctx.process_list);
-	spin_lock_init(&eq->tasklet_ctx.lock);
-	tasklet_setup(&eq->tasklet_ctx.task, mlx4_cq_tasklet_cb);
+	INIT_LIST_HEAD(&eq->work_ctx.list);
+	INIT_LIST_HEAD(&eq->work_ctx.process_list);
+	spin_lock_init(&eq->work_ctx.lock);
+	INIT_WORK(&eq->work_ctx.work, mlx4_cq_work_cb);
 
 	return err;
 
@@ -1101,7 +1101,7 @@ static void mlx4_free_eq(struct mlx4_dev *dev,
 		mlx4_warn(dev, "HW2SW_EQ failed (%d)\n", err);
 
 	synchronize_irq(eq->irq);
-	tasklet_disable(&eq->tasklet_ctx.task);
+	disable_work_sync(&eq->work_ctx.work);
 
 	mlx4_mtt_cleanup(dev, &eq->mtt);
 	for (i = 0; i < npages; ++i)

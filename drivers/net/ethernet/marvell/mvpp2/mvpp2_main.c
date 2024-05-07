@@ -2629,7 +2629,7 @@ static u32 mvpp2_txq_desc_csum(int l3_offs, __be16 l3_proto,
  * Per-thread access
  *
  * Called only from mvpp2_txq_done(), called from mvpp2_tx()
- * (migration disabled) and from the TX completion tasklet (migration
+ * (migration disabled) and from the TX completion BH work (migration
  * disabled) so using smp_processor_id() is OK.
  */
 static inline int mvpp2_txq_sent_desc_proc(struct mvpp2_port *port,

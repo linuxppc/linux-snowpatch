@@ -3342,13 +3342,13 @@ static void skge_error_irq(struct skge_hw *hw)
 }
 
 /*
- * Interrupt from PHY are handled in tasklet (softirq)
+ * Interrupt from PHY are handled in work (softirq)
  * because accessing phy registers requires spin wait which might
  * cause excess interrupt latency.
  */
-static void skge_extirq(struct tasklet_struct *t)
+static void skge_extirq(struct work_struct *t)
 {
-	struct skge_hw *hw = from_tasklet(hw, t, phy_task);
+	struct skge_hw *hw = from_work(hw, t, phy_task);
 	int port;
 
 	for (port = 0; port < hw->ports; port++) {
@@ -3389,7 +3389,7 @@ static irqreturn_t skge_intr(int irq, void *dev_id)
 	status &= hw->intr_mask;
 	if (status & IS_EXT_REG) {
 		hw->intr_mask &= ~IS_EXT_REG;
-		tasklet_schedule(&hw->phy_task);
+		queue_work(system_bh_wq, &hw->phy_task);
 	}
 
 	if (status & (IS_XA1_F|IS_R1_F)) {
@@ -3937,7 +3937,7 @@ static int skge_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	hw->pdev = pdev;
 	spin_lock_init(&hw->hw_lock);
 	spin_lock_init(&hw->phy_lock);
-	tasklet_setup(&hw->phy_task, skge_extirq);
+	INIT_WORK(&hw->phy_task, skge_extirq);
 
 	hw->regs = ioremap(pci_resource_start(pdev, 0), 0x4000);
 	if (!hw->regs) {
@@ -4035,7 +4035,7 @@ static void skge_remove(struct pci_dev *pdev)
 	dev0 = hw->dev[0];
 	unregister_netdev(dev0);
 
-	tasklet_kill(&hw->phy_task);
+	cancel_work_sync(&hw->phy_task);
 
 	spin_lock_irq(&hw->hw_lock);
 	hw->intr_mask = 0;

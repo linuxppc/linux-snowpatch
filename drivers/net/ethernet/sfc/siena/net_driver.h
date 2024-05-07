@@ -431,7 +431,7 @@ enum efx_sync_events_state {
  * struct efx_channel - An Efx channel
  *
  * A channel comprises an event queue, at least one TX queue, at least
- * one RX queue, and an associated tasklet for processing the event
+ * one RX queue, and an associated BH work for processing the event
  * queue.
  *
  * @efx: Associated Efx NIC

@@ -12,6 +12,7 @@
 #ifndef __JME_H_INCLUDED__
 #define __JME_H_INCLUDED__
 #include <linux/interrupt.h>
+#include <linux/workqueue.h>
 
 #define DRV_NAME	"jme"
 #define DRV_VERSION	"1.0.8"
@@ -406,11 +407,11 @@ struct jme_adapter {
 	spinlock_t		phy_lock;
 	spinlock_t		macaddr_lock;
 	spinlock_t		rxmcs_lock;
-	struct tasklet_struct	rxempty_task;
-	struct tasklet_struct	rxclean_task;
-	struct tasklet_struct	txclean_task;
+	struct work_struct	rxempty_task;
+	struct work_struct	rxclean_task;
+	struct work_struct	txclean_task;
 	struct work_struct	linkch_task;
-	struct tasklet_struct	pcc_task;
+	struct work_struct	pcc_task;
 	unsigned long		flags;
 	u32			reg_txcs;
 	u32			reg_txpfc;

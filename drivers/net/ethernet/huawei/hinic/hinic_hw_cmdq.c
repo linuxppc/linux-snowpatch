@@ -344,7 +344,7 @@ static int cmdq_sync_cmd_direct_resp(struct hinic_cmdq *cmdq,
 	struct hinic_hw_wqe *hw_wqe;
 	struct completion done;
 
-	/* Keep doorbell index correct. bh - for tasklet(ceq). */
+	/* Keep doorbell index correct. - for BH work(ceq). */
 	spin_lock_bh(&cmdq->cmdq_lock);
 
 	/* WQE_SIZE = WQEBB_SIZE, we will get the wq element and not shadow*/

@@ -1236,9 +1236,9 @@ static void qed_sb_ack_attn(struct qed_hwfn *p_hwfn,
 	barrier();
 }
 
-void qed_int_sp_dpc(struct tasklet_struct *t)
+void qed_int_sp_dpc(struct work_struct *t)
 {
-	struct qed_hwfn *p_hwfn = from_tasklet(p_hwfn, t, sp_dpc);
+	struct qed_hwfn *p_hwfn = from_work(p_hwfn, t, sp_dpc);
 	struct qed_pi_info *pi_info = NULL;
 	struct qed_sb_attn_info *sb_attn;
 	struct qed_sb_info *sb_info;
@@ -2305,7 +2305,7 @@ u64 qed_int_igu_read_sisr_reg(struct qed_hwfn *p_hwfn)
 
 static void qed_int_sp_dpc_setup(struct qed_hwfn *p_hwfn)
 {
-	tasklet_setup(&p_hwfn->sp_dpc, qed_int_sp_dpc);
+	INIT_WORK(&p_hwfn->sp_dpc, qed_int_sp_dpc);
 	p_hwfn->b_sp_dpc_enabled = true;
 }
 

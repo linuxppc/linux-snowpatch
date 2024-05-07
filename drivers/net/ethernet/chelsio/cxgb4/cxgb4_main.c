@@ -589,7 +589,7 @@ static int fwevtq_handler(struct sge_rspq *q, const __be64 *rsp,
 			struct sge_uld_txq *oq;
 
 			oq = container_of(txq, struct sge_uld_txq, q);
-			tasklet_schedule(&oq->qresume_tsk);
+			queue_work(system_bh_wq, &oq->qresume_tsk);
 		}
 	} else if (opcode == CPL_FW6_MSG || opcode == CPL_FW4_MSG) {
 		const struct cpl_fw6_msg *p = (void *)rsp;

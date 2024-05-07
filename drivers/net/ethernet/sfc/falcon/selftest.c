@@ -26,7 +26,7 @@
  * - All IRQs may be disabled on a CPU for a *long* time by e.g. a
  *   slow serial console or an old IDE driver doing error recovery
  * - The PREEMPT_RT patches mostly deal with this, but also allow a
- *   tasklet or normal task to be given higher priority than our IRQ
+ *   BH work or normal task to be given higher priority than our IRQ
  *   threads
  * Try to avoid blaming the hardware for this.
  */

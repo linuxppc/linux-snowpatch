@@ -6,14 +6,15 @@
 #include <linux/mlx5/driver.h>
 #include <linux/mlx5/eq.h>
 #include <linux/mlx5/cq.h>
+#include <linux/workqueue.h>
 
 #define MLX5_EQE_SIZE       (sizeof(struct mlx5_eqe))
 
-struct mlx5_eq_tasklet {
+struct mlx5_eq_work {
 	struct list_head      list;
 	struct list_head      process_list;
-	struct tasklet_struct task;
-	spinlock_t            lock; /* lock completion tasklet list */
+	struct work_struct work;
+	spinlock_t            lock; /* lock completion work list */
 };
 
 struct mlx5_cq_table {
@@ -44,7 +45,7 @@ struct mlx5_eq_async {
 struct mlx5_eq_comp {
 	struct mlx5_eq          core;
 	struct notifier_block   irq_nb;
-	struct mlx5_eq_tasklet  tasklet_ctx;
+	struct mlx5_eq_work  work_ctx;
 	struct list_head        list;
 };
 
@@ -84,7 +85,7 @@ int mlx5_eq_add_cq(struct mlx5_eq *eq, struct mlx5_core_cq *cq);
 void mlx5_eq_del_cq(struct mlx5_eq *eq, struct mlx5_core_cq *cq);
 struct mlx5_eq_comp *mlx5_eqn2comp_eq(struct mlx5_core_dev *dev, int eqn);
 struct mlx5_eq *mlx5_get_async_eq(struct mlx5_core_dev *dev);
-void mlx5_cq_tasklet_cb(struct tasklet_struct *t);
+void mlx5_cq_work_cb(struct work_struct *t);
 
 u32 mlx5_eq_poll_irq_disabled(struct mlx5_eq_comp *eq);
 void mlx5_cmd_eq_recover(struct mlx5_core_dev *dev);

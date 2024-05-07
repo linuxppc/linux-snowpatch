@@ -122,7 +122,7 @@ enum nfp_nfd_version {
  * @dma_mask:			DMA addressing capability
  * @poll:			Napi poll for normal rx/tx
  * @xsk_poll:			Napi poll when xsk is enabled
- * @ctrl_poll:			Tasklet poll for ctrl rx/tx
+ * @ctrl_poll:			Work poll for ctrl rx/tx
  * @xmit:			Xmit for normal path
  * @ctrl_tx_one:		Xmit for ctrl path
  * @rx_ring_fill_freelist:	Give buffers from the ring to FW
@@ -141,7 +141,7 @@ struct nfp_dp_ops {
 
 	int (*poll)(struct napi_struct *napi, int budget);
 	int (*xsk_poll)(struct napi_struct *napi, int budget);
-	void (*ctrl_poll)(struct tasklet_struct *t);
+	void (*ctrl_poll)(struct work_struct *t);
 	netdev_tx_t (*xmit)(struct sk_buff *skb, struct net_device *netdev);
 	bool (*ctrl_tx_one)(struct nfp_net *nn, struct nfp_net_r_vector *r_vec,
 			    struct sk_buff *skb, bool old);

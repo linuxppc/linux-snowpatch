@@ -1141,7 +1141,7 @@ jme_dynamic_pcc(struct jme_adapter *jme)
 
 	if (unlikely(dpi->attempt != dpi->cur && dpi->cnt > 5)) {
 		if (dpi->attempt < dpi->cur)
-			tasklet_schedule(&jme->rxclean_task);
+			queue_work(system_bh_wq, &jme->rxclean_task);
 		jme_set_rx_pcc(jme, dpi->attempt);
 		dpi->cur = dpi->attempt;
 		dpi->cnt = 0;
@@ -1182,9 +1182,9 @@ jme_shutdown_nic(struct jme_adapter *jme)
 }
 
 static void
-jme_pcc_tasklet(struct tasklet_struct *t)
+jme_pcc_work(struct work_struct *t)
 {
-	struct jme_adapter *jme = from_tasklet(jme, t, pcc_task);
+	struct jme_adapter *jme = from_work(jme, t, pcc_task);
 	struct net_device *netdev = jme->dev;
 
 	if (unlikely(test_bit(JME_FLAG_SHUTDOWN, &jme->flags))) {
@@ -1282,9 +1282,9 @@ static void jme_link_change_work(struct work_struct *work)
 		jme_stop_shutdown_timer(jme);
 
 	jme_stop_pcc_timer(jme);
-	tasklet_disable(&jme->txclean_task);
-	tasklet_disable(&jme->rxclean_task);
-	tasklet_disable(&jme->rxempty_task);
+	disable_work_sync(&jme->txclean_task);
+	disable_work_sync(&jme->rxclean_task);
+	disable_work_sync(&jme->rxempty_task);
 
 	if (netif_carrier_ok(netdev)) {
 		jme_disable_rx_engine(jme);
@@ -1304,7 +1304,7 @@ static void jme_link_change_work(struct work_struct *work)
 		rc = jme_setup_rx_resources(jme);
 		if (rc) {
 			pr_err("Allocating resources for RX error, Device STOPPED!\n");
-			goto out_enable_tasklet;
+			goto out_enable_work;
 		}
 
 		rc = jme_setup_tx_resources(jme);
@@ -1326,22 +1326,22 @@ static void jme_link_change_work(struct work_struct *work)
 		jme_start_shutdown_timer(jme);
 	}
 
-	goto out_enable_tasklet;
+	goto out_enable_work;
 
 err_out_free_rx_resources:
 	jme_free_rx_resources(jme);
-out_enable_tasklet:
-	tasklet_enable(&jme->txclean_task);
-	tasklet_enable(&jme->rxclean_task);
-	tasklet_enable(&jme->rxempty_task);
+out_enable_work:
+	enable_and_queue_work(system_bh_wq, &jme->txclean_task);
+	enable_and_queue_work(system_bh_wq, &jme->rxclean_task);
+	enable_and_queue_work(system_bh_wq, &jme->rxempty_task);
 out:
 	atomic_inc(&jme->link_changing);
 }
 
 static void
-jme_rx_clean_tasklet(struct tasklet_struct *t)
+jme_rx_clean_work(struct work_struct *t)
 {
-	struct jme_adapter *jme = from_tasklet(jme, t, rxclean_task);
+	struct jme_adapter *jme = from_work(jme, t, rxclean_task);
 	struct dynpcc_info *dpi = &(jme->dpi);
 
 	jme_process_receive(jme, jme->rx_ring_size);
@@ -1374,9 +1374,9 @@ jme_poll(JME_NAPI_HOLDER(holder), JME_NAPI_WEIGHT(budget))
 }
 
 static void
-jme_rx_empty_tasklet(struct tasklet_struct *t)
+jme_rx_empty_work(struct work_struct *t)
 {
-	struct jme_adapter *jme = from_tasklet(jme, t, rxempty_task);
+	struct jme_adapter *jme = from_work(jme, t, rxempty_task);
 
 	if (unlikely(atomic_read(&jme->link_changing) != 1))
 		return;
@@ -1386,7 +1386,7 @@ jme_rx_empty_tasklet(struct tasklet_struct *t)
 
 	netif_info(jme, rx_status, jme->dev, "RX Queue Full!\n");
 
-	jme_rx_clean_tasklet(&jme->rxclean_task);
+	jme_rx_clean_work(&jme->rxclean_task);
 
 	while (atomic_read(&jme->rx_empty) > 0) {
 		atomic_dec(&jme->rx_empty);
@@ -1410,9 +1410,9 @@ jme_wake_queue_if_stopped(struct jme_adapter *jme)
 
 }
 
-static void jme_tx_clean_tasklet(struct tasklet_struct *t)
+static void jme_tx_clean_work(struct work_struct *t)
 {
-	struct jme_adapter *jme = from_tasklet(jme, t, txclean_task);
+	struct jme_adapter *jme = from_work(jme, t, txclean_task);
 	struct jme_ring *txring = &(jme->txring[0]);
 	struct txdesc *txdesc = txring->desc;
 	struct jme_buffer_info *txbi = txring->bufinf, *ctxbi, *ttxbi;
@@ -1510,12 +1510,12 @@ jme_intr_msi(struct jme_adapter *jme, u32 intrstat)
 
 	if (intrstat & INTR_TMINTR) {
 		jwrite32(jme, JME_IEVE, INTR_TMINTR);
-		tasklet_schedule(&jme->pcc_task);
+		queue_work(system_bh_wq, &jme->pcc_task);
 	}
 
 	if (intrstat & (INTR_PCCTXTO | INTR_PCCTX)) {
 		jwrite32(jme, JME_IEVE, INTR_PCCTXTO | INTR_PCCTX | INTR_TX0);
-		tasklet_schedule(&jme->txclean_task);
+		queue_work(system_bh_wq, &jme->txclean_task);
 	}
 
 	if ((intrstat & (INTR_PCCRX0TO | INTR_PCCRX0 | INTR_RX0EMP))) {
@@ -1538,9 +1538,9 @@ jme_intr_msi(struct jme_adapter *jme, u32 intrstat)
 	} else {
 		if (intrstat & INTR_RX0EMP) {
 			atomic_inc(&jme->rx_empty);
-			tasklet_hi_schedule(&jme->rxempty_task);
+			queue_work(system_bh_highpri_wq, &jme->rxempty_task);
 		} else if (intrstat & (INTR_PCCRX0TO | INTR_PCCRX0)) {
-			tasklet_hi_schedule(&jme->rxclean_task);
+			queue_work(system_bh_highpri_wq, &jme->rxclean_task);
 		}
 	}
 
@@ -1826,9 +1826,9 @@ jme_open(struct net_device *netdev)
 	jme_clear_pm_disable_wol(jme);
 	JME_NAPI_ENABLE(jme);
 
-	tasklet_setup(&jme->txclean_task, jme_tx_clean_tasklet);
-	tasklet_setup(&jme->rxclean_task, jme_rx_clean_tasklet);
-	tasklet_setup(&jme->rxempty_task, jme_rx_empty_tasklet);
+	INIT_WORK(&jme->txclean_task, jme_tx_clean_work);
+	INIT_WORK(&jme->rxclean_task, jme_rx_clean_work);
+	INIT_WORK(&jme->rxempty_task, jme_rx_empty_work);
 
 	rc = jme_request_irq(jme);
 	if (rc)
@@ -1914,9 +1914,9 @@ jme_close(struct net_device *netdev)
 	JME_NAPI_DISABLE(jme);
 
 	cancel_work_sync(&jme->linkch_task);
-	tasklet_kill(&jme->txclean_task);
-	tasklet_kill(&jme->rxclean_task);
-	tasklet_kill(&jme->rxempty_task);
+	cancel_work_sync(&jme->txclean_task);
+	cancel_work_sync(&jme->rxclean_task);
+	cancel_work_sync(&jme->rxempty_task);
 
 	jme_disable_rx_engine(jme);
 	jme_disable_tx_engine(jme);
@@ -3020,7 +3020,7 @@ jme_init_one(struct pci_dev *pdev,
 	atomic_set(&jme->tx_cleaning, 1);
 	atomic_set(&jme->rx_empty, 1);
 
-	tasklet_setup(&jme->pcc_task, jme_pcc_tasklet);
+	INIT_WORK(&jme->pcc_task, jme_pcc_work);
 	INIT_WORK(&jme->linkch_task, jme_link_change_work);
 	jme->dpi.cur = PCC_P1;
 
@@ -3180,9 +3180,9 @@ jme_suspend(struct device *dev)
 	netif_stop_queue(netdev);
 	jme_stop_irq(jme);
 
-	tasklet_disable(&jme->txclean_task);
-	tasklet_disable(&jme->rxclean_task);
-	tasklet_disable(&jme->rxempty_task);
+	disable_work_sync(&jme->txclean_task);
+	disable_work_sync(&jme->rxclean_task);
+	disable_work_sync(&jme->rxempty_task);
 
 	if (netif_carrier_ok(netdev)) {
 		if (test_bit(JME_FLAG_POLL, &jme->flags))
@@ -3198,9 +3198,9 @@ jme_suspend(struct device *dev)
 		jme->phylink = 0;
 	}
 
-	tasklet_enable(&jme->txclean_task);
-	tasklet_enable(&jme->rxclean_task);
-	tasklet_enable(&jme->rxempty_task);
+	enable_and_queue_work(system_bh_wq, &jme->txclean_task);
+	enable_and_queue_work(system_bh_wq, &jme->rxclean_task);
+	enable_and_queue_work(system_bh_wq, &jme->rxempty_task);
 
 	jme_powersave_phy(jme);
 

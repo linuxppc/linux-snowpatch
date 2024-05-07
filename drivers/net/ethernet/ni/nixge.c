@@ -17,6 +17,7 @@
 #include <linux/nvmem-consumer.h>
 #include <linux/ethtool.h>
 #include <linux/iopoll.h>
+#include <linux/workqueue.h>
 
 #define TX_BD_NUM		64
 #define RX_BD_NUM		128
@@ -184,7 +185,7 @@ struct nixge_priv {
 	void __iomem *ctrl_regs;
 	void __iomem *dma_regs;
 
-	struct tasklet_struct dma_err_tasklet;
+	struct work_struct dma_err_work;
 
 	int tx_irq;
 	int rx_irq;
@@ -732,7 +733,7 @@ static irqreturn_t nixge_tx_irq(int irq, void *_ndev)
 		/* Write to the Rx channel control register */
 		nixge_dma_write_reg(priv, XAXIDMA_RX_CR_OFFSET, cr);
 
-		tasklet_schedule(&priv->dma_err_tasklet);
+		queue_work(system_bh_wq, &priv->dma_err_work);
 		nixge_dma_write_reg(priv, XAXIDMA_TX_SR_OFFSET, status);
 	}
 out:
@@ -780,16 +781,16 @@ static irqreturn_t nixge_rx_irq(int irq, void *_ndev)
 		/* write to the Rx channel control register */
 		nixge_dma_write_reg(priv, XAXIDMA_RX_CR_OFFSET, cr);
 
-		tasklet_schedule(&priv->dma_err_tasklet);
+		queue_work(system_bh_wq, &priv->dma_err_work);
 		nixge_dma_write_reg(priv, XAXIDMA_RX_SR_OFFSET, status);
 	}
 out:
 	return IRQ_HANDLED;
 }
 
-static void nixge_dma_err_handler(struct tasklet_struct *t)
+static void nixge_dma_err_handler(struct work_struct *t)
 {
-	struct nixge_priv *lp = from_tasklet(lp, t, dma_err_tasklet);
+	struct nixge_priv *lp = from_work(lp, t, dma_err_work);
 	struct nixge_hw_dma_bd *cur_p;
 	struct nixge_tx_skb *tx_skb;
 	u32 cr, i;
@@ -878,8 +879,8 @@ static int nixge_open(struct net_device *ndev)
 
 	phy_start(phy);
 
-	/* Enable tasklets for Axi DMA error handling */
-	tasklet_setup(&priv->dma_err_tasklet, nixge_dma_err_handler);
+	/* Enable works for Axi DMA error handling */
+	INIT_WORK(&priv->dma_err_work, nixge_dma_err_handler);
 
 	napi_enable(&priv->napi);
 
@@ -902,7 +903,7 @@ err_tx_irq:
 	napi_disable(&priv->napi);
 	phy_stop(phy);
 	phy_disconnect(phy);
-	tasklet_kill(&priv->dma_err_tasklet);
+	cancel_work_sync(&priv->dma_err_work);
 	netdev_err(ndev, "request_irq() failed\n");
 	return ret;
 }
@@ -927,7 +928,7 @@ static int nixge_stop(struct net_device *ndev)
 	nixge_dma_write_reg(priv, XAXIDMA_TX_CR_OFFSET,
 			    cr & (~XAXIDMA_CR_RUNSTOP_MASK));
 
-	tasklet_kill(&priv->dma_err_tasklet);
+	cancel_work_sync(&priv->dma_err_work);
 
 	free_irq(priv->tx_irq, ndev);
 	free_irq(priv->rx_irq, ndev);

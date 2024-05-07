@@ -114,7 +114,7 @@ static int cxgb4_init_eosw_txq(struct net_device *dev,
 	eosw_txq->cred = adap->params.ofldq_wr_cred;
 	eosw_txq->hwqid = hwqid;
 	eosw_txq->netdev = dev;
-	tasklet_setup(&eosw_txq->qresume_tsk, cxgb4_ethofld_restart);
+	INIT_WORK(&eosw_txq->qresume_tsk, cxgb4_ethofld_restart);
 	return 0;
 }
 
@@ -143,7 +143,7 @@ static void cxgb4_free_eosw_txq(struct net_device *dev,
 	cxgb4_clean_eosw_txq(dev, eosw_txq);
 	kfree(eosw_txq->desc);
 	spin_unlock_bh(&eosw_txq->lock);
-	tasklet_kill(&eosw_txq->qresume_tsk);
+	cancel_work_sync(&eosw_txq->qresume_tsk);
 }
 
 static int cxgb4_mqprio_alloc_hw_resources(struct net_device *dev)

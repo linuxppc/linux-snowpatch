@@ -684,9 +684,9 @@ static void qed_simd_handler_clean(struct qed_dev *cdev, int index)
 	       sizeof(struct qed_simd_fp_handler));
 }
 
-static irqreturn_t qed_msix_sp_int(int irq, void *tasklet)
+static irqreturn_t qed_msix_sp_int(int irq, void *work)
 {
-	tasklet_schedule((struct tasklet_struct *)tasklet);
+	queue_work(system_bh_wq, (struct work_struct *)work);
 	return IRQ_HANDLED;
 }
 
@@ -708,7 +708,7 @@ static irqreturn_t qed_single_int(int irq, void *dev_instance)
 
 		/* Slowpath interrupt */
 		if (unlikely(status & 0x1)) {
-			tasklet_schedule(&hwfn->sp_dpc);
+			queue_work(system_bh_wq, &hwfn->sp_dpc);
 			status &= ~0x1;
 			rc = IRQ_HANDLED;
 		}
@@ -779,15 +779,15 @@ int qed_slowpath_irq_req(struct qed_hwfn *hwfn)
 	return rc;
 }
 
-static void qed_slowpath_tasklet_flush(struct qed_hwfn *p_hwfn)
+static void qed_slowpath_work_flush(struct qed_hwfn *p_hwfn)
 {
 	/* Calling the disable function will make sure that any
 	 * currently-running function is completed. The following call to the
 	 * enable function makes this sequence a flush-like operation.
 	 */
 	if (p_hwfn->b_sp_dpc_enabled) {
-		tasklet_disable(&p_hwfn->sp_dpc);
-		tasklet_enable(&p_hwfn->sp_dpc);
+		disable_work_sync(&p_hwfn->sp_dpc);
+		enable_and_queue_work(system_bh_wq, &p_hwfn->sp_dpc);
 	}
 }
 
@@ -803,7 +803,7 @@ void qed_slowpath_irq_sync(struct qed_hwfn *p_hwfn)
 	else
 		synchronize_irq(cdev->pdev->irq);
 
-	qed_slowpath_tasklet_flush(p_hwfn);
+	qed_slowpath_work_flush(p_hwfn);
 }
 
 static void qed_slowpath_irq_free(struct qed_dev *cdev)
@@ -834,10 +834,10 @@ static int qed_nic_stop(struct qed_dev *cdev)
 		struct qed_hwfn *p_hwfn = &cdev->hwfns[i];
 
 		if (p_hwfn->b_sp_dpc_enabled) {
-			tasklet_disable(&p_hwfn->sp_dpc);
+			disable_work_sync(&p_hwfn->sp_dpc);
 			p_hwfn->b_sp_dpc_enabled = false;
 			DP_VERBOSE(cdev, NETIF_MSG_IFDOWN,
-				   "Disabled sp tasklet [hwfn %d] at %p\n",
+				   "Disabled sp work [hwfn %d] at %p\n",
 				   i, &p_hwfn->sp_dpc);
 		}
 	}
@@ -3115,7 +3115,7 @@ void qed_get_protocol_stats(struct qed_dev *cdev,
 int qed_mfw_tlv_req(struct qed_hwfn *hwfn)
 {
 	DP_VERBOSE(hwfn->cdev, NETIF_MSG_DRV,
-		   "Scheduling slowpath task [Flag: %d]\n",
+		   "Scheduling slowpath work [Flag: %d]\n",
 		   QED_SLOWPATH_MFW_TLV_REQ);
 	/* Memory barrier for setting atomic bit */
 	smp_mb__before_atomic();

@@ -2587,7 +2587,7 @@ void t4vf_free_sge_resources(struct adapter *adapter)
  *	t4vf_sge_start - enable SGE operation
  *	@adapter: the adapter
  *
- *	Start tasklets and timers associated with the DMA engine.
+ *	Start works and timers associated with the DMA engine.
  */
 void t4vf_sge_start(struct adapter *adapter)
 {
@@ -2600,7 +2600,7 @@ void t4vf_sge_start(struct adapter *adapter)
  *	t4vf_sge_stop - disable SGE operation
  *	@adapter: the adapter
  *
- *	Stop tasklets and timers associated with the DMA engine.  Note that
+ *	Stop works and timers associated with the DMA engine.  Note that
  *	this is effective only if measures have been taken to disable any HW
  *	events that may restart them.
  */
@@ -2692,7 +2692,7 @@ int t4vf_sge_init(struct adapter *adapter)
 	s->fl_starve_thres = s->fl_starve_thres * 2 + 1;
 
 	/*
-	 * Set up tasklet timers.
+	 * Set up timers.
 	 */
 	timer_setup(&s->rx_timer, sge_rx_timer_cb, 0);
 	timer_setup(&s->tx_timer, sge_tx_timer_cb, 0);

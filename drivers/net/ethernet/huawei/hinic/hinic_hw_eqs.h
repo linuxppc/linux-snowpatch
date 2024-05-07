@@ -193,7 +193,7 @@ struct hinic_eq {
 
 	struct hinic_eq_work    aeq_work;
 
-	struct tasklet_struct   ceq_tasklet;
+	struct work_struct ceq_work;
 };
 
 struct hinic_hw_event_cb {

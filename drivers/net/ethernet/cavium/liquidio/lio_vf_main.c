@@ -87,7 +87,7 @@ static int lio_wait_for_oq_pkts(struct octeon_device *oct)
 		}
 		if (pkt_cnt > 0) {
 			pending_pkts += pkt_cnt;
-			tasklet_schedule(&oct_priv->droq_tasklet);
+			queue_work(system_bh_wq, &oct_priv->droq_work);
 		}
 		pkt_cnt = 0;
 		schedule_timeout_uninterruptible(1);
@@ -584,7 +584,7 @@ static void octeon_destroy_resources(struct octeon_device *oct)
 		break;
 	}
 
-	tasklet_kill(&oct_priv->droq_tasklet);
+	cancel_work_sync(&oct_priv->droq_work);
 }
 
 /**
@@ -687,7 +687,7 @@ static void liquidio_destroy_nic_device(struct octeon_device *oct, int ifidx)
 	list_for_each_entry_safe(napi, n, &netdev->napi_list, dev_list)
 		netif_napi_del(napi);
 
-	tasklet_enable(&oct_priv->droq_tasklet);
+	enable_and_queue_work(system_bh_wq, &oct_priv->droq_work);
 
 	if (atomic_read(&lio->ifstate) & LIO_IFSTATE_REGISTERED)
 		unregister_netdev(netdev);
@@ -911,7 +911,7 @@ static int liquidio_open(struct net_device *netdev)
 	int ret = 0;
 
 	if (!oct->props[lio->ifidx].napi_enabled) {
-		tasklet_disable(&oct_priv->droq_tasklet);
+		disable_work_sync(&oct_priv->droq_work);
 
 		list_for_each_entry_safe(napi, n, &netdev->napi_list, dev_list)
 			napi_enable(napi);
@@ -986,7 +986,7 @@ static int liquidio_stop(struct net_device *netdev)
 
 		oct->droq[0]->ops.poll_mode = 0;
 
-		tasklet_enable(&oct_priv->droq_tasklet);
+		enable_and_queue_work(system_bh_wq, &oct_priv->droq_work);
 	}
 
 	cancel_delayed_work_sync(&lio->stats_wk.work);

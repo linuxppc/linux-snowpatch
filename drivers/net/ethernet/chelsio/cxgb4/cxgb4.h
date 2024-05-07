@@ -54,6 +54,7 @@
 #include <linux/ptp_classify.h>
 #include <linux/crash_dump.h>
 #include <linux/thermal.h>
+#include <linux/workqueue.h>
 #include <asm/io.h>
 #include "t4_chip_type.h"
 #include "cxgb4_uld.h"
@@ -880,7 +881,7 @@ struct sge_uld_txq {               /* state for an SGE offload Tx queue */
 	struct sge_txq q;
 	struct adapter *adap;
 	struct sk_buff_head sendq;  /* list of backpressured packets */
-	struct tasklet_struct qresume_tsk; /* restarts the queue */
+	struct work_struct qresume_tsk; /* restarts the queue */
 	bool service_ofldq_running; /* service_ofldq() is processing sendq */
 	u8 full;                    /* the Tx ring is full */
 	unsigned long mapping_err;  /* # of I/O MMU packet mapping errors */
@@ -890,7 +891,7 @@ struct sge_ctrl_txq {               /* state for an SGE control Tx queue */
 	struct sge_txq q;
 	struct adapter *adap;
 	struct sk_buff_head sendq;  /* list of backpressured packets */
-	struct tasklet_struct qresume_tsk; /* restarts the queue */
+	struct work_struct qresume_tsk; /* restarts the queue */
 	u8 full;                    /* the Tx ring is full */
 } ____cacheline_aligned_in_smp;
 
@@ -946,7 +947,7 @@ struct sge_eosw_txq {
 
 	u32 hwqid; /* Underlying hardware queue index */
 	struct net_device *netdev; /* Pointer to netdevice */
-	struct tasklet_struct qresume_tsk; /* Restarts the queue */
+	struct work_struct qresume_tsk; /* Restarts the queue */
 	struct completion completion; /* completion for FLOWC rendezvous */
 };
 
@@ -2107,7 +2108,7 @@ void free_tx_desc(struct adapter *adap, struct sge_txq *q,
 void cxgb4_eosw_txq_free_desc(struct adapter *adap, struct sge_eosw_txq *txq,
 			      u32 ndesc);
 int cxgb4_ethofld_send_flowc(struct net_device *dev, u32 eotid, u32 tc);
-void cxgb4_ethofld_restart(struct tasklet_struct *t);
+void cxgb4_ethofld_restart(struct work_struct *t);
 int cxgb4_ethofld_rx_handler(struct sge_rspq *q, const __be64 *rsp,
 			     const struct pkt_gl *si);
 void free_txq(struct adapter *adap, struct sge_txq *q);

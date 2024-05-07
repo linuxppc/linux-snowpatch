@@ -101,7 +101,7 @@ u32 octeon_droq_check_hw_for_pkts(struct octeon_droq *droq)
 	last_count = pkt_count - droq->pkt_count;
 	droq->pkt_count = pkt_count;
 
-	/* we shall write to cnts  at napi irq enable or end of droq tasklet */
+	/* we shall write to cnts  at napi irq enable or end of droq BH work */
 	if (last_count)
 		atomic_add(last_count, &droq->pkts_pending);
 
@@ -769,7 +769,7 @@ octeon_droq_process_packets(struct octeon_device *oct,
 				(u16)rdisp->rinfo->recv_pkt->rh.r.subcode));
 	}
 
-	/* If there are packets pending. schedule tasklet again */
+	/* If there are packets pending. queue BH work again */
 	if (atomic_read(&droq->pkts_pending))
 		return 1;
 

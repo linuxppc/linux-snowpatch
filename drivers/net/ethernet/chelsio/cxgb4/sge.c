@@ -41,6 +41,7 @@
 #include <linux/jiffies.h>
 #include <linux/prefetch.h>
 #include <linux/export.h>
+#include <linux/workqueue.h>
 #include <net/xfrm.h>
 #include <net/ipv6.h>
 #include <net/tcp.h>
@@ -2769,15 +2770,15 @@ static int ctrl_xmit(struct sge_ctrl_txq *q, struct sk_buff *skb)
 
 /**
  *	restart_ctrlq - restart a suspended control queue
- *	@t: pointer to the tasklet associated with this handler
+ *	@t: pointer to the work associated with this handler
  *
  *	Resumes transmission on a suspended Tx control queue.
  */
-static void restart_ctrlq(struct tasklet_struct *t)
+static void restart_ctrlq(struct work_struct *t)
 {
 	struct sk_buff *skb;
 	unsigned int written = 0;
-	struct sge_ctrl_txq *q = from_tasklet(q, t, qresume_tsk);
+	struct sge_ctrl_txq *q = from_work(q, t, qresume_tsk);
 
 	spin_lock(&q->sendq.lock);
 	reclaim_completed_tx_imm(&q->q);
@@ -2926,7 +2927,7 @@ static void ofldtxq_stop(struct sge_uld_txq *q, struct fw_wr_hdr *wr)
  *	left on the queue in case we experience DMA Mapping errors, etc.
  *	and need to give up and restart later.
  *
- *	service_ofldq() can be thought of as a task which opportunistically
+ *	service_ofldq() can be thought of as a work which opportunistically
  *	uses other threads execution contexts.  We use the Offload Queue
  *	boolean "service_ofldq_running" to make sure that only one instance
  *	is ever running at a time ...
@@ -3075,13 +3076,13 @@ static int ofld_xmit(struct sge_uld_txq *q, struct sk_buff *skb)
 
 /**
  *	restart_ofldq - restart a suspended offload queue
- *	@t: pointer to the tasklet associated with this handler
+ *	@t: pointer to the work associated with this handler
  *
  *	Resumes transmission on a suspended Tx offload queue.
  */
-static void restart_ofldq(struct tasklet_struct *t)
+static void restart_ofldq(struct work_struct *t)
 {
-	struct sge_uld_txq *q = from_tasklet(q, t, qresume_tsk);
+	struct sge_uld_txq *q = from_work(q, t, qresume_tsk);
 
 	spin_lock(&q->sendq.lock);
 	q->full = 0;            /* the queue actually is completely empty now */
@@ -4020,9 +4021,9 @@ static int napi_rx_handler(struct napi_struct *napi, int budget)
 	return work_done;
 }
 
-void cxgb4_ethofld_restart(struct tasklet_struct *t)
+void cxgb4_ethofld_restart(struct work_struct *t)
 {
-	struct sge_eosw_txq *eosw_txq = from_tasklet(eosw_txq, t,
+	struct sge_eosw_txq *eosw_txq = from_work(eosw_txq, t,
 						     qresume_tsk);
 	int pktcount;
 
@@ -4050,7 +4051,7 @@ void cxgb4_ethofld_restart(struct tasklet_struct *t)
  * @si: the gather list of packet fragments
  *
  * Process a ETHOFLD Tx completion. Increment the cidx here, but
- * free up the descriptors in a tasklet later.
+ * free up the descriptors in a work later.
  */
 int cxgb4_ethofld_rx_handler(struct sge_rspq *q, const __be64 *rsp,
 			     const struct pkt_gl *si)
@@ -4117,10 +4118,10 @@ int cxgb4_ethofld_rx_handler(struct sge_rspq *q, const __be64 *rsp,
 
 		spin_unlock(&eosw_txq->lock);
 
-		/* Schedule a tasklet to reclaim SKBs and restart ETHOFLD Tx,
+		/* Schedule a work to reclaim SKBs and restart ETHOFLD Tx,
 		 * if there were packets waiting for completion.
 		 */
-		tasklet_schedule(&eosw_txq->qresume_tsk);
+		queue_work(system_bh_wq, &eosw_txq->qresume_tsk);
 	}
 
 out_done:
@@ -4279,7 +4280,7 @@ static void sge_tx_timer_cb(struct timer_list *t)
 			struct sge_uld_txq *txq = s->egr_map[id];
 
 			clear_bit(id, s->txq_maperr);
-			tasklet_schedule(&txq->qresume_tsk);
+			queue_work(system_bh_wq, &txq->qresume_tsk);
 		}
 
 	if (!is_t4(adap->params.chip)) {
@@ -4719,7 +4720,7 @@ int t4_sge_alloc_ctrl_txq(struct adapter *adap, struct sge_ctrl_txq *txq,
 	init_txq(adap, &txq->q, FW_EQ_CTRL_CMD_EQID_G(ntohl(c.cmpliqid_eqid)));
 	txq->adap = adap;
 	skb_queue_head_init(&txq->sendq);
-	tasklet_setup(&txq->qresume_tsk, restart_ctrlq);
+	INIT_WORK(&txq->qresume_tsk, restart_ctrlq);
 	txq->full = 0;
 	return 0;
 }
@@ -4809,7 +4810,7 @@ int t4_sge_alloc_uld_txq(struct adapter *adap, struct sge_uld_txq *txq,
 	txq->q.q_type = CXGB4_TXQ_ULD;
 	txq->adap = adap;
 	skb_queue_head_init(&txq->sendq);
-	tasklet_setup(&txq->qresume_tsk, restart_ofldq);
+	INIT_WORK(&txq->qresume_tsk, restart_ofldq);
 	txq->full = 0;
 	txq->mapping_err = 0;
 	return 0;
@@ -4952,7 +4953,7 @@ void t4_free_sge_resources(struct adapter *adap)
 		struct sge_ctrl_txq *cq = &adap->sge.ctrlq[i];
 
 		if (cq->q.desc) {
-			tasklet_kill(&cq->qresume_tsk);
+			cancel_work_sync(&cq->qresume_tsk);
 			t4_ctrl_eq_free(adap, adap->mbox, adap->pf, 0,
 					cq->q.cntxt_id);
 			__skb_queue_purge(&cq->sendq);
@@ -5002,7 +5003,7 @@ void t4_sge_start(struct adapter *adap)
  *	t4_sge_stop - disable SGE operation
  *	@adap: the adapter
  *
- *	Stop tasklets and timers associated with the DMA engine.  Note that
+ *	Stop works and timers associated with the DMA engine.  Note that
  *	this is effective only if measures have been taken to disable any HW
  *	events that may restart them.
  */
@@ -5025,7 +5026,7 @@ void t4_sge_stop(struct adapter *adap)
 
 			for_each_ofldtxq(&adap->sge, i) {
 				if (txq->q.desc)
-					tasklet_kill(&txq->qresume_tsk);
+					cancel_work_sync(&txq->qresume_tsk);
 			}
 		}
 	}
@@ -5039,7 +5040,7 @@ void t4_sge_stop(struct adapter *adap)
 
 			for_each_ofldtxq(&adap->sge, i) {
 				if (txq->q.desc)
-					tasklet_kill(&txq->qresume_tsk);
+					cancel_work_sync(&txq->qresume_tsk);
 			}
 		}
 	}
@@ -5048,7 +5049,7 @@ void t4_sge_stop(struct adapter *adap)
 		struct sge_ctrl_txq *cq = &s->ctrlq[i];
 
 		if (cq->q.desc)
-			tasklet_kill(&cq->qresume_tsk);
+			cancel_work_sync(&cq->qresume_tsk);
 	}
 }
 

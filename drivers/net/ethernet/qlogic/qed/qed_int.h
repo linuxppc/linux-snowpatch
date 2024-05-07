@@ -142,12 +142,12 @@ int qed_int_sb_release(struct qed_hwfn *p_hwfn,
  * qed_int_sp_dpc(): To be called when an interrupt is received on the
  *                   default status block.
  *
- * @t: Tasklet.
+ * @t: Work.
  *
  * Return: Void.
  *
  */
-void qed_int_sp_dpc(struct tasklet_struct *t);
+void qed_int_sp_dpc(struct work_struct *t);
 
 /**
  * qed_int_get_num_sbs(): Get the number of status blocks configured

@@ -368,12 +368,12 @@ static void eq_irq_work(struct work_struct *work)
 }
 
 /**
- * ceq_tasklet - the tasklet of the EQ that received the event
- * @t: the tasklet struct pointer
+ * ceq_work - the work of the EQ that received the event
+ * @t: the work struct pointer
  **/
-static void ceq_tasklet(struct tasklet_struct *t)
+static void ceq_work(struct work_struct *t)
 {
-	struct hinic_eq *ceq = from_tasklet(ceq, t, ceq_tasklet);
+	struct hinic_eq *ceq = from_work(ceq, t, ceq_work);
 
 	eq_irq_handler(ceq);
 }
@@ -413,7 +413,7 @@ static irqreturn_t ceq_interrupt(int irq, void *data)
 	/* clear resend timer cnt register */
 	hinic_msix_attr_cnt_clear(ceq->hwif, ceq->msix_entry.entry);
 
-	tasklet_schedule(&ceq->ceq_tasklet);
+	queue_work(system_bh_wq, &ceq->ceq_work);
 
 	return IRQ_HANDLED;
 }
@@ -782,7 +782,7 @@ static int init_eq(struct hinic_eq *eq, struct hinic_hwif *hwif,
 
 		INIT_WORK(&aeq_work->work, eq_irq_work);
 	} else if (type == HINIC_CEQ) {
-		tasklet_setup(&eq->ceq_tasklet, ceq_tasklet);
+		INIT_WORK(&eq->ceq_work, ceq_work);
 	}
 
 	/* set the attributes of the msix entry */
@@ -833,7 +833,7 @@ static void remove_eq(struct hinic_eq *eq)
 		hinic_hwif_write_reg(eq->hwif,
 				     HINIC_CSR_AEQ_CTRL_1_ADDR(eq->q_id), 0);
 	} else if (eq->type == HINIC_CEQ) {
-		tasklet_kill(&eq->ceq_tasklet);
+		cancel_work_sync(&eq->ceq_work);
 		/* clear ceq_len to avoid hw access host memory */
 		hinic_hwif_write_reg(eq->hwif,
 				     HINIC_CSR_CEQ_CTRL_1_ADDR(eq->q_id), 0);
@@ -968,9 +968,8 @@ void hinic_dump_ceq_info(struct hinic_hwdev *hwdev)
 		ci = hinic_hwif_read_reg(hwdev->hwif, addr);
 		addr = EQ_PROD_IDX_REG_ADDR(eq);
 		pi = hinic_hwif_read_reg(hwdev->hwif, addr);
-		dev_err(&hwdev->hwif->pdev->dev, "Ceq id: %d, ci: 0x%08x, sw_ci: 0x%08x, pi: 0x%x, tasklet_state: 0x%lx, wrap: %d, ceqe: 0x%x\n",
+		dev_err(&hwdev->hwif->pdev->dev, "Ceq id: %d, ci: 0x%08x, sw_ci: 0x%08x, pi: 0x%x, wrap: %d, ceqe: 0x%x\n",
 			q_id, ci, eq->cons_idx, pi,
-			eq->ceq_tasklet.state,
 			eq->wrapped, be32_to_cpu(*(__be32 *)(GET_CURR_CEQ_ELEM(eq))));
 	}
 }

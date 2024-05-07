@@ -36,6 +36,7 @@
 
 #include <linux/mlx5/cq.h>
 #include <linux/mlx5/qp.h>
+#include <linux/workqueue.h>
 
 #include "fpga/core.h"
 #include "fpga/sdk.h"
@@ -56,7 +57,7 @@ struct mlx5_fpga_conn {
 		struct mlx5_cqwq wq;
 		struct mlx5_wq_ctrl wq_ctrl;
 		struct mlx5_core_cq mcq;
-		struct tasklet_struct tasklet;
+		struct work_struct work;
 	} cq;
 
 	/* QP */

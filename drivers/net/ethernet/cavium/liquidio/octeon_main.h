@@ -24,6 +24,7 @@
 #define  _OCTEON_MAIN_H_
 
 #include <linux/sched/signal.h>
+#include <linux/workqueue.h>
 
 #if BITS_PER_LONG == 32
 #define CVM_CAST64(v) ((long long)(v))
@@ -36,8 +37,8 @@
 #define DRV_NAME "LiquidIO"
 
 struct octeon_device_priv {
-	/** Tasklet structures for this device. */
-	struct tasklet_struct droq_tasklet;
+	/** Work structures for this device. */
+	struct work_struct droq_work;
 	unsigned long napi_mask;
 	struct octeon_device *dev;
 };

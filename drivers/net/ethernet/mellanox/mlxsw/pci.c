@@ -14,6 +14,7 @@
 #include <linux/if_vlan.h>
 #include <linux/log2.h>
 #include <linux/string.h>
+#include <linux/workqueue.h>
 
 #include "pci_hw.h"
 #include "pci.h"
@@ -78,7 +79,7 @@ struct mlxsw_pci_queue {
 	u8 num; /* queue number */
 	u8 elem_size; /* size of one element */
 	enum mlxsw_pci_queue_type type;
-	struct tasklet_struct tasklet; /* queue processing tasklet */
+	struct work_struct work; /* queue processing work */
 	struct mlxsw_pci *pci;
 	union {
 		struct {
@@ -135,9 +136,9 @@ struct mlxsw_pci {
 	bool skip_reset;
 };
 
-static void mlxsw_pci_queue_tasklet_schedule(struct mlxsw_pci_queue *q)
+static void mlxsw_pci_queue_work(struct mlxsw_pci_queue *q)
 {
-	tasklet_schedule(&q->tasklet);
+	queue_work(system_bh_wq, &q->work);
 }
 
 static char *__mlxsw_pci_queue_elem_get(struct mlxsw_pci_queue *q,
@@ -714,9 +715,9 @@ static char *mlxsw_pci_cq_sw_cqe_get(struct mlxsw_pci_queue *q)
 	return elem;
 }
 
-static void mlxsw_pci_cq_tasklet(struct tasklet_struct *t)
+static void mlxsw_pci_cq_work(struct work_struct *t)
 {
-	struct mlxsw_pci_queue *q = from_tasklet(q, t, tasklet);
+	struct mlxsw_pci_queue *q = from_work(q, t, work);
 	struct mlxsw_pci *mlxsw_pci = q->pci;
 	char *cqe;
 	int items = 0;
@@ -827,9 +828,9 @@ static char *mlxsw_pci_eq_sw_eqe_get(struct mlxsw_pci_queue *q)
 	return elem;
 }
 
-static void mlxsw_pci_eq_tasklet(struct tasklet_struct *t)
+static void mlxsw_pci_eq_work(struct work_struct *t)
 {
-	struct mlxsw_pci_queue *q = from_tasklet(q, t, tasklet);
+	struct mlxsw_pci_queue *q = from_work(q, t, work);
 	struct mlxsw_pci *mlxsw_pci = q->pci;
 	u8 cq_count = mlxsw_pci_cq_count(mlxsw_pci);
 	unsigned long active_cqns[BITS_TO_LONGS(MLXSW_PCI_CQS_MAX)];
@@ -873,7 +874,7 @@ static void mlxsw_pci_eq_tasklet(struct tasklet_struct *t)
 		return;
 	for_each_set_bit(cqn, active_cqns, cq_count) {
 		q = mlxsw_pci_cq_get(mlxsw_pci, cqn);
-		mlxsw_pci_queue_tasklet_schedule(q);
+		mlxsw_pci_queue_work(q);
 	}
 }
 
@@ -886,7 +887,7 @@ struct mlxsw_pci_queue_ops {
 		    struct mlxsw_pci_queue *q);
 	void (*fini)(struct mlxsw_pci *mlxsw_pci,
 		     struct mlxsw_pci_queue *q);
-	void (*tasklet)(struct tasklet_struct *t);
+	void (*work)(struct work_struct *t);
 	u16 (*elem_count_f)(const struct mlxsw_pci_queue *q);
 	u8 (*elem_size_f)(const struct mlxsw_pci_queue *q);
 	u16 elem_count;
@@ -914,7 +915,7 @@ static const struct mlxsw_pci_queue_ops mlxsw_pci_cq_ops = {
 	.pre_init	= mlxsw_pci_cq_pre_init,
 	.init		= mlxsw_pci_cq_init,
 	.fini		= mlxsw_pci_cq_fini,
-	.tasklet	= mlxsw_pci_cq_tasklet,
+	.work	= mlxsw_pci_cq_work,
 	.elem_count_f	= mlxsw_pci_cq_elem_count,
 	.elem_size_f	= mlxsw_pci_cq_elem_size
 };
@@ -923,7 +924,7 @@ static const struct mlxsw_pci_queue_ops mlxsw_pci_eq_ops = {
 	.type		= MLXSW_PCI_QUEUE_TYPE_EQ,
 	.init		= mlxsw_pci_eq_init,
 	.fini		= mlxsw_pci_eq_fini,
-	.tasklet	= mlxsw_pci_eq_tasklet,
+	.work	= mlxsw_pci_eq_work,
 	.elem_count	= MLXSW_PCI_EQE_COUNT,
 	.elem_size	= MLXSW_PCI_EQE_SIZE
 };
@@ -948,8 +949,8 @@ static int mlxsw_pci_queue_init(struct mlxsw_pci *mlxsw_pci, char *mbox,
 	q->type = q_ops->type;
 	q->pci = mlxsw_pci;
 
-	if (q_ops->tasklet)
-		tasklet_setup(&q->tasklet, q_ops->tasklet);
+	if (q_ops->work)
+		INIT_WORK(&q->work, q_ops->work);
 
 	mem_item->size = MLXSW_PCI_AQ_SIZE;
 	mem_item->buf = dma_alloc_coherent(&mlxsw_pci->pdev->dev,
@@ -1436,7 +1437,7 @@ static irqreturn_t mlxsw_pci_eq_irq_handler(int irq, void *dev_id)
 
 	for (i = 0; i < MLXSW_PCI_EQS_COUNT; i++) {
 		q = mlxsw_pci_eq_get(mlxsw_pci, i);
-		mlxsw_pci_queue_tasklet_schedule(q);
+		mlxsw_pci_queue_work(q);
 	}
 	return IRQ_HANDLED;
 }

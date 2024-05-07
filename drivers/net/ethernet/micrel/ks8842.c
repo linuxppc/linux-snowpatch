@@ -22,6 +22,7 @@
 #include <linux/dmaengine.h>
 #include <linux/dma-mapping.h>
 #include <linux/scatterlist.h>
+#include <linux/workqueue.h>
 
 #define DRV_NAME "ks8842"
 
@@ -140,7 +141,7 @@ struct ks8842_rx_dma_ctl {
 	struct dma_async_tx_descriptor *adesc;
 	struct sk_buff  *skb;
 	struct scatterlist sg;
-	struct tasklet_struct tasklet;
+	struct work_struct work;
 	int channel;
 };
 
@@ -151,7 +152,7 @@ struct ks8842_adapter {
 	void __iomem	*hw_addr;
 	int		irq;
 	unsigned long	conf_flags;	/* copy of platform_device config */
-	struct tasklet_struct	tasklet;
+	struct work_struct	work;
 	spinlock_t	lock; /* spinlock to be interrupt safe */
 	struct work_struct timeout_work;
 	struct net_device *netdev;
@@ -589,9 +590,9 @@ out:
 	return err;
 }
 
-static void ks8842_rx_frame_dma_tasklet(struct tasklet_struct *t)
+static void ks8842_rx_frame_dma_work(struct work_struct *t)
 {
-	struct ks8842_adapter *adapter = from_tasklet(adapter, t, dma_rx.tasklet);
+	struct ks8842_adapter *adapter = from_work(adapter, t, dma_rx.work);
 	struct net_device *netdev = adapter->netdev;
 	struct ks8842_rx_dma_ctl *ctl = &adapter->dma_rx;
 	struct sk_buff *skb = ctl->skb;
@@ -722,9 +723,9 @@ static void ks8842_handle_rx_overrun(struct net_device *netdev,
 	netdev->stats.rx_fifo_errors++;
 }
 
-static void ks8842_tasklet(struct tasklet_struct *t)
+static void ks8842_work(struct work_struct *t)
 {
-	struct ks8842_adapter *adapter = from_tasklet(adapter, t, tasklet);
+	struct ks8842_adapter *adapter = from_work(adapter, t, work);
 	struct net_device *netdev = adapter->netdev;
 	u16 isr;
 	unsigned long flags;
@@ -813,8 +814,8 @@ static irqreturn_t ks8842_irq(int irq, void *devid)
 			/* disable IRQ */
 			ks8842_write16(adapter, 18, 0x00, REG_IER);
 
-		/* schedule tasklet */
-		tasklet_schedule(&adapter->tasklet);
+		/* schedule work */
+		queue_work(system_bh_wq, &adapter->work);
 
 		ret = IRQ_HANDLED;
 	}
@@ -835,9 +836,9 @@ static void ks8842_dma_rx_cb(void *data)
 	struct ks8842_adapter	*adapter = netdev_priv(netdev);
 
 	netdev_dbg(netdev, "RX DMA finished\n");
-	/* schedule tasklet */
+	/* schedule work */
 	if (adapter->dma_rx.adesc)
-		tasklet_schedule(&adapter->dma_rx.tasklet);
+		queue_work(system_bh_wq, &adapter->dma_rx.work);
 }
 
 static void ks8842_dma_tx_cb(void *data)
@@ -895,7 +896,7 @@ static void ks8842_dealloc_dma_bufs(struct ks8842_adapter *adapter)
 		dma_release_channel(rx_ctl->chan);
 	rx_ctl->chan = NULL;
 
-	tasklet_kill(&rx_ctl->tasklet);
+	cancel_work_sync(&rx_ctl->work);
 
 	if (sg_dma_address(&tx_ctl->sg))
 		dma_unmap_single(adapter->dev, sg_dma_address(&tx_ctl->sg),
@@ -955,7 +956,7 @@ static int ks8842_alloc_dma_bufs(struct net_device *netdev)
 		goto err;
 	}
 
-	tasklet_setup(&rx_ctl->tasklet, ks8842_rx_frame_dma_tasklet);
+	INIT_WORK(&rx_ctl->work, ks8842_rx_frame_dma_work);
 
 	return 0;
 err:
@@ -1178,7 +1179,7 @@ static int ks8842_probe(struct platform_device *pdev)
 		adapter->dma_tx.channel = -1;
 	}
 
-	tasklet_setup(&adapter->tasklet, ks8842_tasklet);
+	INIT_WORK(&adapter->work, ks8842_work);
 	spin_lock_init(&adapter->lock);
 
 	netdev->netdev_ops = &ks8842_netdev_ops;
@@ -1235,7 +1236,7 @@ static void ks8842_remove(struct platform_device *pdev)
 	struct resource *iomem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 
 	unregister_netdev(netdev);
-	tasklet_kill(&adapter->tasklet);
+	cancel_work_sync(&adapter->work);
 	iounmap(adapter->hw_addr);
 	free_netdev(netdev);
 	release_mem_region(iomem->start, resource_size(iomem));

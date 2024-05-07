@@ -38,14 +38,14 @@
 #include "mlx5_core.h"
 #include "lib/eq.h"
 
-#define TASKLET_MAX_TIME 2
-#define TASKLET_MAX_TIME_JIFFIES msecs_to_jiffies(TASKLET_MAX_TIME)
+#define BH_WORK_MAX_TIME 2
+#define BH_WORK_MAX_TIME_JIFFIES msecs_to_jiffies(BH_WORK_MAX_TIME)
 
-void mlx5_cq_tasklet_cb(struct tasklet_struct *t)
+void mlx5_cq_work_cb(struct work_struct *t)
 {
 	unsigned long flags;
-	unsigned long end = jiffies + TASKLET_MAX_TIME_JIFFIES;
-	struct mlx5_eq_tasklet *ctx = from_tasklet(ctx, t, task);
+	unsigned long end = jiffies + BH_WORK_MAX_TIME_JIFFIES;
+	struct mlx5_eq_work *ctx = from_work(ctx, t, work);
 	struct mlx5_core_cq *mcq;
 	struct mlx5_core_cq *temp;
 
@@ -54,35 +54,35 @@ void mlx5_cq_tasklet_cb(struct tasklet_struct *t)
 	spin_unlock_irqrestore(&ctx->lock, flags);
 
 	list_for_each_entry_safe(mcq, temp, &ctx->process_list,
-				 tasklet_ctx.list) {
-		list_del_init(&mcq->tasklet_ctx.list);
-		mcq->tasklet_ctx.comp(mcq, NULL);
+				 work_ctx.list) {
+		list_del_init(&mcq->work_ctx.list);
+		mcq->work_ctx.comp(mcq, NULL);
 		mlx5_cq_put(mcq);
 		if (time_after(jiffies, end))
 			break;
 	}
 
 	if (!list_empty(&ctx->process_list))
-		tasklet_schedule(&ctx->task);
+		queue_work(system_bh_wq, &ctx->work);
 }
 
-static void mlx5_add_cq_to_tasklet(struct mlx5_core_cq *cq,
-				   struct mlx5_eqe *eqe)
+static void mlx5_add_cq_to_work(struct mlx5_core_cq *cq,
+				struct mlx5_eqe *eqe)
 {
 	unsigned long flags;
-	struct mlx5_eq_tasklet *tasklet_ctx = cq->tasklet_ctx.priv;
+	struct mlx5_eq_work *work_ctx = cq->work_ctx.priv;
 
-	spin_lock_irqsave(&tasklet_ctx->lock, flags);
+	spin_lock_irqsave(&work_ctx->lock, flags);
 	/* When migrating CQs between EQs will be implemented, please note
 	 * that you need to sync this point. It is possible that
 	 * while migrating a CQ, completions on the old EQs could
 	 * still arrive.
 	 */
-	if (list_empty_careful(&cq->tasklet_ctx.list)) {
+	if (list_empty_careful(&cq->work_ctx.list)) {
 		mlx5_cq_hold(cq);
-		list_add_tail(&cq->tasklet_ctx.list, &tasklet_ctx->list);
+		list_add_tail(&cq->work_ctx.list, &work_ctx->list);
 	}
-	spin_unlock_irqrestore(&tasklet_ctx->lock, flags);
+	spin_unlock_irqrestore(&work_ctx->lock, flags);
 }
 
 /* Callers must verify outbox status in case of err */
@@ -113,10 +113,10 @@ int mlx5_create_cq(struct mlx5_core_dev *dev, struct mlx5_core_cq *cq,
 	refcount_set(&cq->refcount, 1);
 	init_completion(&cq->free);
 	if (!cq->comp)
-		cq->comp = mlx5_add_cq_to_tasklet;
+		cq->comp = mlx5_add_cq_to_work;
 	/* assuming CQ will be deleted before the EQ */
-	cq->tasklet_ctx.priv = &eq->tasklet_ctx;
-	INIT_LIST_HEAD(&cq->tasklet_ctx.list);
+	cq->work_ctx.priv = &eq->work_ctx;
+	INIT_LIST_HEAD(&cq->work_ctx.list);
 
 	/* Add to comp EQ CQ tree to recv comp events */
 	err = mlx5_eq_add_cq(&eq->core, cq);

@@ -253,7 +253,7 @@ int mlx4_ib_create_cq(struct ib_cq *ibcq, const struct ib_cq_init_attr *attr,
 		goto err_dbmap;
 
 	if (udata)
-		cq->mcq.tasklet_ctx.comp = mlx4_ib_cq_comp;
+		cq->mcq.work_ctx.comp = mlx4_ib_cq_comp;
 	else
 		cq->mcq.comp = mlx4_ib_cq_comp;
 	cq->mcq.event = mlx4_ib_cq_event;

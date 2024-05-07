@@ -97,7 +97,7 @@ netdev_tx_t nfp_nfd3_tx(struct sk_buff *skb, struct net_device *netdev);
 bool
 nfp_nfd3_ctrl_tx_one(struct nfp_net *nn, struct nfp_net_r_vector *r_vec,
 		     struct sk_buff *skb, bool old);
-void nfp_nfd3_ctrl_poll(struct tasklet_struct *t);
+void nfp_nfd3_ctrl_poll(struct work_struct *t);
 void nfp_nfd3_rx_ring_fill_freelist(struct nfp_net_dp *dp,
 				    struct nfp_net_rx_ring *rx_ring);
 void nfp_nfd3_xsk_tx_free(struct nfp_nfd3_tx_buf *txbuf);

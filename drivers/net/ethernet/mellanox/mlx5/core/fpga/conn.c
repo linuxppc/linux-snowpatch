@@ -34,6 +34,7 @@
 #include <net/addrconf.h>
 #include <linux/etherdevice.h>
 #include <linux/mlx5/vport.h>
+#include <linux/workqueue.h>
 
 #include "mlx5_core.h"
 #include "lib/mlx5.h"
@@ -378,7 +379,7 @@ static inline void mlx5_fpga_conn_cqes(struct mlx5_fpga_conn *conn,
 		mlx5_cqwq_update_db_record(&conn->cq.wq);
 	}
 	if (!budget) {
-		tasklet_schedule(&conn->cq.tasklet);
+		queue_work(system_bh_wq, &conn->cq.work);
 		return;
 	}
 
@@ -388,9 +389,9 @@ static inline void mlx5_fpga_conn_cqes(struct mlx5_fpga_conn *conn,
 	mlx5_fpga_conn_arm_cq(conn);
 }
 
-static void mlx5_fpga_conn_cq_tasklet(struct tasklet_struct *t)
+static void mlx5_fpga_conn_cq_work(struct work_struct *t)
 {
-	struct mlx5_fpga_conn *conn = from_tasklet(conn, t, cq.tasklet);
+	struct mlx5_fpga_conn *conn = from_work(conn, t, cq.work);
 
 	if (unlikely(!conn->qp.active))
 		return;
@@ -476,7 +477,7 @@ static int mlx5_fpga_conn_create_cq(struct mlx5_fpga_conn *conn, int cq_size)
 	conn->cq.mcq.vector     = 0;
 	conn->cq.mcq.comp       = mlx5_fpga_conn_cq_complete;
 	conn->cq.mcq.uar        = fdev->conn_res.uar;
-	tasklet_setup(&conn->cq.tasklet, mlx5_fpga_conn_cq_tasklet);
+	INIT_WORK(&conn->cq.work, mlx5_fpga_conn_cq_work);
 
 	mlx5_fpga_dbg(fdev, "Created CQ #0x%x\n", conn->cq.mcq.cqn);
 
@@ -490,8 +491,8 @@ out:
 
 static void mlx5_fpga_conn_destroy_cq(struct mlx5_fpga_conn *conn)
 {
-	tasklet_disable(&conn->cq.tasklet);
-	tasklet_kill(&conn->cq.tasklet);
+	disable_work_sync(&conn->cq.work);
+	cancel_work_sync(&conn->cq.work);
 	mlx5_core_destroy_cq(conn->fdev->mdev, &conn->cq.mcq);
 	mlx5_wq_destroy(&conn->cq.wq_ctrl);
 }
@@ -933,7 +934,7 @@ out:
 void mlx5_fpga_conn_destroy(struct mlx5_fpga_conn *conn)
 {
 	conn->qp.active = false;
-	tasklet_disable(&conn->cq.tasklet);
+	disable_work_sync(&conn->cq.work);
 	synchronize_irq(conn->cq.mcq.irqn);
 
 	mlx5_fpga_destroy_qp(conn->fdev->mdev, conn->fpga_qpn);

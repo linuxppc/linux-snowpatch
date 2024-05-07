@@ -463,7 +463,7 @@ static irqreturn_t nfp_ctrl_irq_rxtx(int irq, void *data)
 {
 	struct nfp_net_r_vector *r_vec = data;
 
-	tasklet_schedule(&r_vec->tasklet);
+	queue_work(system_bh_wq, &r_vec->work);
 
 	return IRQ_HANDLED;
 }
@@ -761,8 +761,8 @@ static void nfp_net_vecs_init(struct nfp_net *nn)
 
 			__skb_queue_head_init(&r_vec->queue);
 			spin_lock_init(&r_vec->lock);
-			tasklet_setup(&r_vec->tasklet, nn->dp.ops->ctrl_poll);
-			tasklet_disable(&r_vec->tasklet);
+			INIT_WORK(&r_vec->work, nn->dp.ops->ctrl_poll);
+			disable_work_sync(&r_vec->work);
 		}
 
 		cpumask_set_cpu(cpumask_local_spread(r, numa_node), &r_vec->affinity_mask);
@@ -776,7 +776,7 @@ nfp_net_napi_add(struct nfp_net_dp *dp, struct nfp_net_r_vector *r_vec, int idx)
 		netif_napi_add(dp->netdev, &r_vec->napi,
 			       nfp_net_has_xsk_pool_slow(dp, idx) ? dp->ops->xsk_poll : dp->ops->poll);
 	else
-		tasklet_enable(&r_vec->tasklet);
+		enable_and_queue_work(system_bh_wq, &r_vec->work);
 }
 
 static void
@@ -785,7 +785,7 @@ nfp_net_napi_del(struct nfp_net_dp *dp, struct nfp_net_r_vector *r_vec)
 	if (dp->netdev)
 		netif_napi_del(&r_vec->napi);
 	else
-		tasklet_disable(&r_vec->tasklet);
+		disable_work_sync(&r_vec->work);
 }
 
 static void
@@ -1148,7 +1148,7 @@ void nfp_ctrl_close(struct nfp_net *nn)
 
 	for (r = 0; r < nn->dp.num_r_vecs; r++) {
 		disable_irq(nn->r_vecs[r].irq_vector);
-		tasklet_disable(&nn->r_vecs[r].tasklet);
+		disable_work_sync(&nn->r_vecs[r].work);
 	}
 
 	nfp_net_clear_config_and_disable(nn);

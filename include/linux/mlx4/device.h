@@ -745,7 +745,7 @@ struct mlx4_cq {
 		struct list_head list;
 		void (*comp)(struct mlx4_cq *);
 		void		*priv;
-	} tasklet_ctx;
+	} work_ctx;
 	int		reset_notify_added;
 	struct list_head	reset_notify;
 	u8			usage;

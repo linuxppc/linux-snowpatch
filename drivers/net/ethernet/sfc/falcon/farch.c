@@ -766,7 +766,7 @@ void ef4_farch_finish_flr(struct ef4_nic *efx)
 /**************************************************************************
  *
  * Event queue processing
- * Event queues are processed by per-channel tasklets.
+ * Event queues are processed by per-channel works.
  *
  **************************************************************************/
 
@@ -1397,7 +1397,7 @@ void ef4_farch_rx_defer_refill(struct ef4_rx_queue *rx_queue)
  *
  * Hardware interrupts
  * The hardware interrupt handler does very little work; all the event
- * queue processing is carried out by per-channel tasklets.
+ * queue processing is carried out by per-channel works.
  *
  **************************************************************************/
 

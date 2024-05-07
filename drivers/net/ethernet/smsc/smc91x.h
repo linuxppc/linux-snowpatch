@@ -201,7 +201,7 @@ struct smc_local {
 	 * desired memory.  Then, I'll send it out and free it.
 	 */
 	struct sk_buff *pending_tx_skb;
-	struct tasklet_struct tx_task;
+	struct work_struct tx_task;
 
 	struct gpio_desc *power_gpio;
 	struct gpio_desc *reset_gpio;
@@ -260,6 +260,7 @@ struct smc_local {
  * as RX which can overrun memory and lose packets.
  */
 #include <linux/dma-mapping.h>
+#include <linux/workqueue.h>
 
 #ifdef SMC_insl
 #undef SMC_insl

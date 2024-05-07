@@ -1564,9 +1564,9 @@ static bool nfp_ctrl_rx(struct nfp_net_r_vector *r_vec)
 	return budget;
 }
 
-void nfp_nfdk_ctrl_poll(struct tasklet_struct *t)
+void nfp_nfdk_ctrl_poll(struct work_struct *t)
 {
-	struct nfp_net_r_vector *r_vec = from_tasklet(r_vec, t, tasklet);
+	struct nfp_net_r_vector *r_vec = from_work(r_vec, t, work);
 
 	spin_lock(&r_vec->lock);
 	nfp_nfdk_tx_complete(r_vec->tx_ring, 0);
@@ -1576,7 +1576,7 @@ void nfp_nfdk_ctrl_poll(struct tasklet_struct *t)
 	if (nfp_ctrl_rx(r_vec)) {
 		nfp_net_irq_unmask(r_vec->nfp_net, r_vec->irq_entry);
 	} else {
-		tasklet_schedule(&r_vec->tasklet);
+		queue_work(system_bh_wq, &r_vec->work);
 		nn_dp_warn(&r_vec->nfp_net->dp,
 			   "control message budget exceeded!\n");
 	}

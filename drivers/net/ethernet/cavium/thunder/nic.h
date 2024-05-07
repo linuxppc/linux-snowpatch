@@ -9,6 +9,7 @@
 #include <linux/netdevice.h>
 #include <linux/interrupt.h>
 #include <linux/pci.h>
+#include <linux/workqueue.h>
 #include "thunder_bgx.h"
 
 /* PCI device IDs */
@@ -295,7 +296,7 @@ struct nicvf {
 	bool			rb_work_scheduled;
 	struct page		*rb_page;
 	struct delayed_work	rbdr_work;
-	struct tasklet_struct	rbdr_task;
+	struct work_struct	rbdr_task;
 
 	/* Secondary Qset */
 	u8			sqs_count;
@@ -319,7 +320,7 @@ struct nicvf {
 	bool			loopback_supported;
 	struct nicvf_rss_info	rss_info;
 	struct nicvf_pfc	pfc;
-	struct tasklet_struct	qs_err_task;
+	struct work_struct	qs_err_task;
 	struct work_struct	reset_task;
 	struct nicvf_work       rx_mode_work;
 	/* spinlock to protect workqueue arguments from concurrent access */

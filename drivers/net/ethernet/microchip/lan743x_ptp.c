@@ -1380,7 +1380,7 @@ void lan743x_ptp_isr(void *context)
 
 	if (ptp_int_sts & PTP_INT_BIT_TX_TS_) {
 		ptp_schedule_worker(ptp->ptp_clock, 0);
-		enable_flag = 0;/* tasklet will re-enable later */
+		enable_flag = 0;/* BH work will re-enable later */
 	}
 	if (ptp_int_sts & PTP_INT_BIT_TX_SWTS_ERR_) {
 		netif_err(adapter, drv, adapter->netdev,

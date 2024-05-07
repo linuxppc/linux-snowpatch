@@ -925,7 +925,7 @@ int liquidio_schedule_msix_droq_pkt_handler(struct octeon_droq *droq, u64 ret)
 			if (OCTEON_CN23XX_VF(oct))
 				dev_err(&oct->pci_dev->dev,
 					"should not come here should not get rx when poll mode = 0 for vf\n");
-			tasklet_schedule(&oct_priv->droq_tasklet);
+			queue_work(system_bh_wq, &oct_priv->droq_work);
 			return 1;
 		}
 		/* this will be flushed periodically by check iq db */
@@ -975,7 +975,7 @@ static void liquidio_schedule_droq_pkt_handlers(struct octeon_device *oct)
 				droq->ops.napi_fn(droq);
 				oct_priv->napi_mask |= BIT_ULL(oq_no);
 			} else {
-				tasklet_schedule(&oct_priv->droq_tasklet);
+				queue_work(system_bh_wq, &oct_priv->droq_work);
 			}
 		}
 	}

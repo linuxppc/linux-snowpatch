@@ -34,6 +34,7 @@
 #include <linux/ethtool.h>
 #include <linux/mii.h>
 #include <linux/crc32.h>
+#include <linux/workqueue.h>
 
 #include <asm/irq.h>
 
@@ -255,7 +256,7 @@ enum PMConfigBits {
  */
 
 /* Locking rules for the interrupt:
- * - the interrupt and the tasklet never run at the same time
+ * - the interrupt and the work never run at the same time
  * - neither run between sc92031_disable_interrupts and
  *   sc92031_enable_interrupt
  */
@@ -266,8 +267,8 @@ struct sc92031_priv {
 	void __iomem		*port_base;
 	/* pci device structure */
 	struct pci_dev		*pdev;
-	/* tasklet */
-	struct tasklet_struct	tasklet;
+	/* work */
+	struct work_struct	work;
 
 	/* CPU address of rx ring */
 	void			*rx_ring;
@@ -355,7 +356,7 @@ static void sc92031_disable_interrupts(struct net_device *dev)
 	struct sc92031_priv *priv = netdev_priv(dev);
 	void __iomem *port_base = priv->port_base;
 
-	/* tell the tasklet/interrupt not to enable interrupts */
+	/* tell the work/interrupt not to enable interrupts */
 	atomic_set(&priv->intr_mask, 0);
 	wmb();
 
@@ -363,9 +364,9 @@ static void sc92031_disable_interrupts(struct net_device *dev)
 	iowrite32(0, port_base + IntrMask);
 	_sc92031_dummy_read(port_base);
 
-	/* wait for any concurrent interrupt/tasklet to finish */
+	/* wait for any concurrent interrupt/work to finish */
 	synchronize_irq(priv->pdev->irq);
-	tasklet_disable(&priv->tasklet);
+	disable_work_sync(&priv->work);
 }
 
 static void sc92031_enable_interrupts(struct net_device *dev)
@@ -373,7 +374,7 @@ static void sc92031_enable_interrupts(struct net_device *dev)
 	struct sc92031_priv *priv = netdev_priv(dev);
 	void __iomem *port_base = priv->port_base;
 
-	tasklet_enable(&priv->tasklet);
+	enable_and_queue_work(system_bh_wq, &priv->work);
 
 	atomic_set(&priv->intr_mask, IntrBits);
 	wmb();
@@ -644,7 +645,7 @@ static void _sc92031_reset(struct net_device *dev)
 	ioread32(port_base + IntrStatus);
 }
 
-static void _sc92031_tx_tasklet(struct net_device *dev)
+static void _sc92031_tx_work(struct net_device *dev)
 {
 	struct sc92031_priv *priv = netdev_priv(dev);
 	void __iomem *port_base = priv->port_base;
@@ -692,8 +693,8 @@ static void _sc92031_tx_tasklet(struct net_device *dev)
 			netif_wake_queue(dev);
 }
 
-static void _sc92031_rx_tasklet_error(struct net_device *dev,
-				      u32 rx_status, unsigned rx_size)
+static void _sc92031_rx_work_error(struct net_device *dev,
+				   u32 rx_status, unsigned rx_size)
 {
 	if(rx_size > (MAX_ETH_FRAME_SIZE + 4) || rx_size < 16) {
 		dev->stats.rx_errors++;
@@ -717,7 +718,7 @@ static void _sc92031_rx_tasklet_error(struct net_device *dev,
 	}
 }
 
-static void _sc92031_rx_tasklet(struct net_device *dev)
+static void _sc92031_rx_work(struct net_device *dev)
 {
 	struct sc92031_priv *priv = netdev_priv(dev);
 	void __iomem *port_base = priv->port_base;
@@ -773,7 +774,7 @@ static void _sc92031_rx_tasklet(struct net_device *dev)
 			     rx_size > (MAX_ETH_FRAME_SIZE + 4) ||
 			     rx_size < 16 ||
 			     !(rx_status & RxStatesOK))) {
-			_sc92031_rx_tasklet_error(dev, rx_status, rx_size);
+			_sc92031_rx_work_error(dev, rx_status, rx_size);
 			break;
 		}
 
@@ -820,7 +821,7 @@ static void _sc92031_rx_tasklet(struct net_device *dev)
 	iowrite32(priv->rx_ring_tail, port_base + RxBufRPtr);
 }
 
-static void _sc92031_link_tasklet(struct net_device *dev)
+static void _sc92031_link_work(struct net_device *dev)
 {
 	if (_sc92031_check_media(dev))
 		netif_wake_queue(dev);
@@ -830,9 +831,9 @@ static void _sc92031_link_tasklet(struct net_device *dev)
 	}
 }
 
-static void sc92031_tasklet(struct tasklet_struct *t)
+static void sc92031_work(struct work_struct *t)
 {
-	struct  sc92031_priv *priv = from_tasklet(priv, t, tasklet);
+	struct  sc92031_priv *priv = from_work(priv, t, work);
 	struct net_device *dev = priv->ndev;
 	void __iomem *port_base = priv->port_base;
 	u32 intr_status, intr_mask;
@@ -845,10 +846,10 @@ static void sc92031_tasklet(struct tasklet_struct *t)
 		goto out;
 
 	if (intr_status & TxOK)
-		_sc92031_tx_tasklet(dev);
+		_sc92031_tx_work(dev);
 
 	if (intr_status & RxOK)
-		_sc92031_rx_tasklet(dev);
+		_sc92031_rx_work(dev);
 
 	if (intr_status & RxOverflow)
 		dev->stats.rx_errors++;
@@ -859,7 +860,7 @@ static void sc92031_tasklet(struct tasklet_struct *t)
 	}
 
 	if (intr_status & (LinkFail | LinkOK))
-		_sc92031_link_tasklet(dev);
+		_sc92031_link_work(dev);
 
 out:
 	intr_mask = atomic_read(&priv->intr_mask);
@@ -890,7 +891,7 @@ static irqreturn_t sc92031_interrupt(int irq, void *dev_id)
 		goto out_none;
 
 	priv->intr_status = intr_status;
-	tasklet_schedule(&priv->tasklet);
+	queue_work(system_bh_wq, &priv->work);
 
 	return IRQ_HANDLED;
 
@@ -1109,7 +1110,7 @@ static void sc92031_poll_controller(struct net_device *dev)
 
 	disable_irq(irq);
 	if (sc92031_interrupt(irq, dev) != IRQ_NONE)
-		sc92031_tasklet(&priv->tasklet);
+		sc92031_work(&priv->work);
 	enable_irq(irq);
 }
 #endif
@@ -1449,10 +1450,10 @@ static int sc92031_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	spin_lock_init(&priv->lock);
 	priv->port_base = port_base;
 	priv->pdev = pdev;
-	tasklet_setup(&priv->tasklet, sc92031_tasklet);
-	/* Fudge tasklet count so the call to sc92031_enable_interrupts at
+	INIT_WORK(&priv->work, sc92031_work);
+	/* Fudge work count so the call to sc92031_enable_interrupts at
 	 * sc92031_open will work correctly */
-	tasklet_disable_nosync(&priv->tasklet);
+	disable_work(&priv->work);
 
 	/* PCI PM Wakeup */
 	iowrite32((~PM_LongWF & ~PM_LWPTN) | PM_Enable, port_base + PMConfig);

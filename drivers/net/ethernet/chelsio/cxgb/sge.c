@@ -44,6 +44,7 @@
 #include <linux/if_arp.h>
 #include <linux/slab.h>
 #include <linux/prefetch.h>
+#include <linux/workqueue.h>
 
 #include "cpl5_cmd.h"
 #include "sge.h"
@@ -229,11 +230,11 @@ struct sched {
 	unsigned int	port;		/* port index (round robin ports) */
 	unsigned int	num;		/* num skbs in per port queues */
 	struct sched_port p[MAX_NPORTS];
-	struct tasklet_struct sched_tsk;/* tasklet used to run scheduler */
+	struct work_struct sched_tsk;/* work used to run scheduler */
 	struct sge *sge;
 };
 
-static void restart_sched(struct tasklet_struct *t);
+static void restart_sched(struct work_struct *t);
 
 
 /*
@@ -270,14 +271,14 @@ static const u8 ch_mac_addr[ETH_ALEN] = {
 };
 
 /*
- * stop tasklet and free all pending skb's
+ * stop work and free all pending skb's
  */
 static void tx_sched_stop(struct sge *sge)
 {
 	struct sched *s = sge->tx_sched;
 	int i;
 
-	tasklet_kill(&s->sched_tsk);
+	cancel_work_sync(&s->sched_tsk);
 
 	for (i = 0; i < MAX_NPORTS; i++)
 		__skb_queue_purge(&s->p[s->port].skbq);
@@ -371,7 +372,7 @@ static int tx_sched_init(struct sge *sge)
 		return -ENOMEM;
 
 	pr_debug("tx_sched_init\n");
-	tasklet_setup(&s->sched_tsk, restart_sched);
+	INIT_WORK(&s->sched_tsk, restart_sched);
 	s->sge = sge;
 	sge->tx_sched = s;
 
@@ -1300,12 +1301,12 @@ static inline void reclaim_completed_tx(struct sge *sge, struct cmdQ *q)
 }
 
 /*
- * Called from tasklet. Checks the scheduler for any
+ * Called from work. Checks the scheduler for any
  * pending skbs that can be sent.
  */
-static void restart_sched(struct tasklet_struct *t)
+static void restart_sched(struct work_struct *t)
 {
-	struct sched *s = from_tasklet(s, t, sched_tsk);
+	struct sched *s = from_work(s, t, sched_tsk);
 	struct sge *sge = s->sge;
 	struct adapter *adapter = sge->adapter;
 	struct cmdQ *q = &sge->cmdQ[0];
@@ -1451,7 +1452,7 @@ static unsigned int update_tx_info(struct adapter *adapter,
 			writel(F_CMDQ0_ENABLE, adapter->regs + A_SG_DOORBELL);
 		}
 		if (sge->tx_sched)
-			tasklet_hi_schedule(&sge->tx_sched->sched_tsk);
+			queue_work(system_bh_highpri_wq, &sge->tx_sched->sched_tsk);
 
 		flags &= ~F_CMDQ0_ENABLE;
 	}

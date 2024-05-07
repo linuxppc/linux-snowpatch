@@ -5,6 +5,7 @@
 #ifndef _SKGE_H
 #define _SKGE_H
 #include <linux/interrupt.h>
+#include <linux/workqueue.h>
 
 /* PCI config registers */
 #define PCI_DEV_REG1	0x40
@@ -2418,7 +2419,7 @@ struct skge_hw {
 	u32	     	     ram_offset;
 	u16		     phy_addr;
 	spinlock_t	     phy_lock;
-	struct tasklet_struct phy_task;
+	struct work_struct phy_task;
 
 	char		     irq_name[]; /* skge@pci:000:04:00.0 */
 };
