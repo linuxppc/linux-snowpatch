@@ -30,16 +30,24 @@ static inline int is_hugepage_only_range(struct mm_struct *mm,
 }
 #define is_hugepage_only_range is_hugepage_only_range
 
-#define __HAVE_ARCH_HUGETLB_FREE_PGD_RANGE
-void hugetlb_free_pgd_range(struct mmu_gather *tlb, unsigned long addr,
-			    unsigned long end, unsigned long floor,
-			    unsigned long ceiling);
+#define __HAVE_ARCH_HUGE_SET_HUGE_PTE_AT
+void set_huge_pte_at(struct mm_struct *mm, unsigned long addr, pte_t *ptep,
+		     pte_t pte, unsigned long sz);
 
 #define __HAVE_ARCH_HUGE_PTEP_GET_AND_CLEAR
 static inline pte_t huge_ptep_get_and_clear(struct mm_struct *mm,
 					    unsigned long addr, pte_t *ptep)
 {
-	return __pte(pte_update(mm, addr, ptep, ~0UL, 0, 1));
+	pmd_t *pmdp = (pmd_t *)ptep;
+	pte_t pte;
+
+	if (IS_ENABLED(CONFIG_PPC_8xx) && pmdp == pmd_off(mm, ALIGN_DOWN(addr, SZ_8M))) {
+		pte = __pte(pte_update(mm, addr, pte_offset_kernel(pmdp, 0), ~0UL, 0, 1));
+		pte_update(mm, addr, pte_offset_kernel(pmdp + 1, 0), ~0UL, 0, 1);
+	} else {
+		pte = __pte(pte_update(mm, addr, ptep, ~0UL, 0, 1));
+	}
+	return pte;
 }
 
 #define __HAVE_ARCH_HUGE_PTEP_CLEAR_FLUSH
@@ -66,14 +74,6 @@ static inline void flush_hugetlb_page(struct vm_area_struct *vma,
 				      unsigned long vmaddr)
 {
 }
-
-#define hugepd_shift(x) 0
-static inline pte_t *hugepte_offset(hugepd_t hpd, unsigned long addr,
-				    unsigned pdshift)
-{
-	return NULL;
-}
-
 
 static inline void __init gigantic_hugetlb_cma_reserve(void)
 {

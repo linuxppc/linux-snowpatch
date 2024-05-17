@@ -20,12 +20,6 @@ struct user_struct;
 struct mmu_gather;
 struct node;
 
-#ifndef CONFIG_ARCH_HAS_HUGEPD
-typedef struct { unsigned long pd; } hugepd_t;
-#define is_hugepd(hugepd) (0)
-#define __hugepd(x) ((hugepd_t) { (x) })
-#endif
-
 void free_huge_folio(struct folio *folio);
 
 #ifdef CONFIG_HUGETLB_PAGE
@@ -193,9 +187,9 @@ static inline pte_t *pte_offset_huge(pmd_t *pmd, unsigned long address)
 	return pte_offset_kernel(pmd, address);
 }
 static inline pte_t *pte_alloc_huge(struct mm_struct *mm, pmd_t *pmd,
-				    unsigned long address)
+				    unsigned long address, unsigned long sz)
 {
-	return pte_alloc(mm, pmd) ? NULL : pte_offset_huge(pmd, address);
+	return pte_alloc_size(mm, pmd, sz) ? NULL : pte_offset_huge(pmd, address);
 }
 #endif
 

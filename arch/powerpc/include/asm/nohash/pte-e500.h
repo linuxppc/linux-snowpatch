@@ -46,6 +46,9 @@
 #define _PAGE_NO_CACHE	0x400000 /* I: cache inhibit */
 #define _PAGE_WRITETHRU	0x800000 /* W: cache write-through */
 
+#define _PAGE_HSIZE_MSK (_PAGE_U0 | _PAGE_U1 | _PAGE_U2 | _PAGE_U3)
+#define _PAGE_HSIZE_SHIFT	14
+
 /* "Higher level" linux bit combinations */
 #define _PAGE_EXEC		(_PAGE_BAP_SX | _PAGE_BAP_UX) /* .. and was cache cleaned */
 #define _PAGE_READ		(_PAGE_BAP_SR | _PAGE_BAP_UR) /* User read permission */
@@ -64,9 +67,8 @@
 #define _PAGE_RWX	(_PAGE_READ | _PAGE_WRITE | _PAGE_BAP_UX)
 
 #define _PAGE_SPECIAL	_PAGE_SW0
+#define _PAGE_PTE	_PAGE_PSIZE_4K
 
-/* Base page size */
-#define _PAGE_PSIZE	_PAGE_PSIZE_4K
 #define	PTE_RPN_SHIFT	(24)
 
 #define PTE_WIMGE_SHIFT (19)
@@ -89,7 +91,7 @@
  * pages. We always set _PAGE_COHERENT when SMP is enabled or
  * the processor might need it for DMA coherency.
  */
-#define _PAGE_BASE_NC	(_PAGE_PRESENT | _PAGE_ACCESSED | _PAGE_PSIZE)
+#define _PAGE_BASE_NC	(_PAGE_PRESENT | _PAGE_ACCESSED | _PAGE_PSIZE_4K)
 #if defined(CONFIG_SMP)
 #define _PAGE_BASE	(_PAGE_BASE_NC | _PAGE_COHERENT)
 #else
@@ -104,6 +106,20 @@ static inline pte_t pte_mkexec(pte_t pte)
 	return __pte((pte_val(pte) & ~_PAGE_BAP_SX) | _PAGE_BAP_UX);
 }
 #define pte_mkexec pte_mkexec
+
+static inline int pmd_leaf(pmd_t pmd)
+{
+	return pmd_val(pmd) & _PAGE_PTE;
+}
+#define pmd_leaf pmd_leaf
+
+#ifdef CONFIG_PPC64
+static inline int pud_leaf(pud_t pud)
+{
+	return pud_val(pud) & _PAGE_PTE;
+}
+#define pud_leaf pud_leaf
+#endif
 
 #endif /* __ASSEMBLY__ */
 
