@@ -1263,7 +1263,7 @@ enum {
 struct bnx2x_fw_stats_req {
 	struct stats_query_header hdr;
 	struct stats_query_entry query[FP_SB_MAX_E1x+
-		BNX2X_FIRST_QUEUE_QUERY_IDX];
+		BNX2X_FIRST_QUEUE_QUERY_IDX + 2];
 };
 
 struct bnx2x_fw_stats_data {
