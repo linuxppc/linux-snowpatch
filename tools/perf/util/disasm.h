@@ -3,12 +3,16 @@
 #define __PERF_UTIL_DISASM_H
 
 #include "map_symbol.h"
+#include "dwarf-aux.h"
 
 struct annotation_options;
 struct disasm_line;
 struct ins;
 struct evsel;
 struct symbol;
+struct data_loc_info;
+struct type_state;
+struct disasm_line;
 
 struct arch {
 	const char	*name;
@@ -32,31 +36,43 @@ struct arch {
 		char memory_ref_char;
 		char imm_char;
 	} objdump;
+	void		(*update_insn_state)(struct type_state *state,
+				struct data_loc_info *dloc, Dwarf_Die *cu_die,
+				struct disasm_line *dl);
 };
 
 struct ins {
 	const char     *name;
+	int	opcode;
 	struct ins_ops *ops;
 };
 
 struct ins_operands {
 	char	*raw;
+	int	raw_insn;
+	int	opcode;
 	struct {
 		char	*raw;
 		char	*name;
+		int	opcode;
+		int	raw_insn;
 		struct symbol *sym;
 		u64	addr;
 		s64	offset;
 		bool	offset_avail;
 		bool	outside;
 		bool	multi_regs;
+		bool	mem_ref;
 	} target;
 	union {
 		struct {
 			char	*raw;
 			char	*name;
+			int	opcode;
+			int	raw_insn;
 			u64	addr;
 			bool	multi_regs;
+			bool	mem_ref;
 		} source;
 		struct {
 			struct ins	    ins;
@@ -90,7 +106,7 @@ struct annotate_args {
 struct arch *arch__find(const char *name);
 bool arch__is(struct arch *arch, const char *name);
 
-struct ins_ops *ins__find(struct arch *arch, const char *name);
+struct ins_ops *ins__find(struct arch *arch, const char *name, struct disasm_line *dl);
 int ins__scnprintf(struct ins *ins, char *bf, size_t size,
 		   struct ins_operands *ops, int max_ins_name);
 

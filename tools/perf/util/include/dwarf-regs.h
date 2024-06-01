@@ -1,9 +1,11 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 #ifndef _PERF_DWARF_REGS_H_
 #define _PERF_DWARF_REGS_H_
+#include "annotate.h"
 
 #define DWARF_REG_PC  0xd3af9c /* random number */
 #define DWARF_REG_FB  0xd3affb /* random number */
+#define DWARF_REG_GLOBAL 0xd3affc /* random number */
 
 #ifdef HAVE_DWARF_SUPPORT
 const char *get_arch_regstr(unsigned int n);
@@ -30,6 +32,8 @@ static inline int get_dwarf_regnum(const char *name __maybe_unused,
 	return -1;
 }
 #endif
+
+void get_arch_regs(int raw_insn, int is_source, struct annotated_op_loc *op_loc);
 
 #ifdef HAVE_ARCH_REGS_QUERY_REGISTER_OFFSET
 /*
