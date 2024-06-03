@@ -599,6 +599,8 @@ struct kvm_vcpu_arch {
 	ulong dawrx0;
 	ulong dawr1;
 	ulong dawrx1;
+	ulong dexcr;
+	ulong hashkeyr;
 	ulong ciabr;
 	ulong cfar;
 	ulong ppr;
