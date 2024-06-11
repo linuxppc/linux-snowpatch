@@ -221,6 +221,8 @@
 			i2s0: i2s@20094000 {
 				compatible = "nxp,lpc3220-i2s";
 				reg = <0x20094000 0x1000>;
+				clocks = <&clk LPC32XX_CLK_I2S0>;
+				clock-names = "i2s_clk";
 				status = "disabled";
 			};
 
@@ -237,6 +239,8 @@
 			i2s1: i2s@2009c000 {
 				compatible = "nxp,lpc3220-i2s";
 				reg = <0x2009c000 0x1000>;
+				clocks = <&clk LPC32XX_CLK_I2S1>;
+				clock-names = "i2s_clk";
 				status = "disabled";
 			};
 
