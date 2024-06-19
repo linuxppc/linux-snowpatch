@@ -31,6 +31,20 @@ EXPORT_SYMBOL_GPL(kernstart_virt_addr);
 
 bool disable_kuep = !IS_ENABLED(CONFIG_PPC_KUEP);
 bool disable_kuap = !IS_ENABLED(CONFIG_PPC_KUAP);
+#ifdef CONFIG_KFENCE
+bool __ro_after_init kfence_early_init = !!CONFIG_KFENCE_SAMPLE_INTERVAL;
+bool __ro_after_init kfence_disabled;
+
+static int __init parse_kfence_early_init(char *arg)
+{
+	int val;
+
+	if (get_option(&arg, &val))
+		kfence_early_init = !!val;
+	return 0;
+}
+early_param("kfence.sample_interval", parse_kfence_early_init);
+#endif
 
 static int __init parse_nosmep(char *p)
 {
