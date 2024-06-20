@@ -33,6 +33,7 @@ properties:
       - items:
           - enum:
               - fsl,imx-sgtl5000
+              - fsl,imx-sabreauto-spdif
               - fsl,imx25-pdk-sgtl5000
               - fsl,imx53-cpuvo-sgtl5000
               - fsl,imx51-babbage-sgtl5000
@@ -54,6 +55,7 @@ properties:
               - fsl,imx6q-ventana-sgtl5000
               - fsl,imx6sl-evk-wm8962
               - fsl,imx6sx-sdb-mqs
+              - fsl,imx6sx-sdb-spdif
               - fsl,imx6sx-sdb-wm8962
               - fsl,imx7d-evk-wm8960
               - karo,tx53-audio-sgtl5000
@@ -65,6 +67,7 @@ properties:
               - fsl,imx-audio-sgtl5000
               - fsl,imx-audio-wm8960
               - fsl,imx-audio-wm8962
+              - fsl,imx-audio-spdif
       - items:
           - enum:
               - fsl,imx-audio-ac97
@@ -81,6 +84,7 @@ properties:
               - fsl,imx-audio-wm8960
               - fsl,imx-audio-wm8962
               - fsl,imx-audio-wm8958
+              - fsl,imx-audio-spdif
 
   model:
     $ref: /schemas/types.yaml#/definitions/string
@@ -93,8 +97,15 @@ properties:
       need to add ASRC support via DPCM.
 
   audio-codec:
-    $ref: /schemas/types.yaml#/definitions/phandle
-    description: The phandle of an audio codec
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+    description: |
+      The phandle of an audio codec.
+      With "fsl,imx-audio-spdif", either SPDIF audio codec spdif_transmitter,
+      spdif_receiver or both.
+    minItems: 1
+    maxItems: 2
+    items:
+      maxItems: 1
 
   audio-cpu:
     $ref: /schemas/types.yaml#/definitions/phandle
@@ -150,8 +161,10 @@ properties:
     description: dai-link uses bit clock inversion.
 
   mclk-id:
-    $ref: /schemas/types.yaml#/definitions/uint32
-    description: main clock id, specific for each card configuration.
+    $ref: /schemas/types.yaml#/definitions/uint32-array
+    description: Main clock id for each codec, specific for each card configuration.
+    minItems: 1
+    maxItems: 2
 
   mux-int-port:
     $ref: /schemas/types.yaml#/definitions/uint32
@@ -194,4 +207,13 @@ examples:
              "AIN1R", "Line In Jack",
              "AIN2L", "Line In Jack",
              "AIN2R", "Line In Jack";
+    };
+
+  - |
+    sound-spdif-asrc {
+      compatible = "fsl,imx-audio-spdif";
+      model = "spdif-asrc-audio";
+      audio-cpu = <&spdif>;
+      audio-asrc = <&easrc>;
+      audio-codec = <&spdifdit>, <&spdifdir>;
     };
