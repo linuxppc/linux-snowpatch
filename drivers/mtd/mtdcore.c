@@ -149,6 +149,9 @@ static ssize_t mtd_type_show(struct device *dev,
 	case MTD_ROM:
 		type = "rom";
 		break;
+	case MTD_EEPROM:
+		type = "eeprom";
+		break;
 	case MTD_NORFLASH:
 		type = "nor";
 		break;
@@ -544,6 +547,20 @@ static int mtd_nvmem_reg_read(void *priv, unsigned int offset,
 	return retlen == bytes ? 0 : -EIO;
 }
 
+static int mtd_nvmem_reg_write(void *priv, unsigned int offset,
+			       void *val, size_t bytes)
+{
+	struct mtd_info *mtd = priv;
+	size_t retlen;
+	int err;
+
+	err = mtd_write(mtd, offset, bytes, &retlen, val);
+	if (err && err != -EUCLEAN)
+		return err;
+
+	return retlen == bytes ? 0 : -EIO;
+}
+
 static int mtd_nvmem_add(struct mtd_info *mtd)
 {
 	struct device_node *node = mtd_get_of_node(mtd);
@@ -555,13 +572,41 @@ static int mtd_nvmem_add(struct mtd_info *mtd)
 	config.owner = THIS_MODULE;
 	config.add_legacy_fixed_of_cells = of_device_is_compatible(node, "nvmem-cells");
 	config.reg_read = mtd_nvmem_reg_read;
+	config.reg_write = mtd_nvmem_reg_write;
 	config.size = mtd->size;
 	config.word_size = 1;
 	config.stride = 1;
-	config.read_only = true;
+	config.read_only = !(mtd->flags & MTD_WRITEABLE);
 	config.root_only = true;
 	config.ignore_wp = true;
 	config.priv = mtd;
+
+	switch (mtd->type) {
+	case MTD_EEPROM:
+		config.type = NVMEM_TYPE_EEPROM;
+		/*
+		 * The master device must be backward compatible with the
+		 * predecessor (misc/eeprom/at24.c) driver. Therefore we need to
+		 * adapt the naming scheme.
+		 *
+		 * Initialize config.id to NVMEM_DEVID_AUTO even if the
+		 * mtd->name is provided via an label as some platform can have
+		 * multiple eeproms with same label and we can not register each
+		 * of those with same label. Failing to register those eeproms
+		 * trigger cascade failure on such platform.
+		 */
+		if (mtd_is_master(mtd)) {
+			config.id = NVMEM_DEVID_AUTO;
+			config.compat = true;
+			config.name = mtd->name;
+			config.dev = mtd->dev.parent;
+			config.base_dev = mtd->dev.parent;
+		}
+		break;
+	default:
+		config.type = NVMEM_TYPE_UNKNOWN;
+		break;
+	}
 
 	mtd->nvmem = nvmem_register(&config);
 	if (IS_ERR(mtd->nvmem)) {
@@ -1061,7 +1106,7 @@ int mtd_device_parse_register(struct mtd_info *mtd, const char * const *types,
 	if (ret)
 		goto out;
 
-	if (IS_ENABLED(CONFIG_MTD_PARTITIONED_MASTER)) {
+	if (IS_ENABLED(CONFIG_MTD_PARTITIONED_MASTER) || mtd->type == MTD_EEPROM) {
 		ret = add_mtd_device(mtd);
 		if (ret)
 			goto out;
