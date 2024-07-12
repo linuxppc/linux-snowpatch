@@ -31,63 +31,60 @@
 #include <linux/dma-mapping.h>
 #include "dpaa_sys.h"
 
-/*
- * Initialize a devices private memory region
- */
-int qbman_init_private_mem(struct device *dev, int idx, const char *compat,
-			   dma_addr_t *addr, size_t *size)
+static int qbman_reserved_mem_lookup(struct device_node *mem_node,
+				     dma_addr_t *addr, size_t *size)
 {
-	struct device_node *mem_node;
 	struct reserved_mem *rmem;
-	int err;
-	__be32 *res_array;
-
-	mem_node = of_parse_phandle(dev->of_node, "memory-region", idx);
-	if (!mem_node) {
-		mem_node = of_find_compatible_node(NULL, NULL, compat);
-		if (!mem_node) {
-			dev_err(dev, "No memory-region found for index %d or compatible '%s'\n",
-				idx, compat);
-			return -ENODEV;
-		}
-	}
 
 	rmem = of_reserved_mem_lookup(mem_node);
 	if (!rmem) {
-		dev_err(dev, "of_reserved_mem_lookup() returned NULL\n");
+		pr_err("of_reserved_mem_lookup(%pOF) returned NULL\n", mem_node);
 		return -ENODEV;
 	}
 	*addr = rmem->base;
 	*size = rmem->size;
 
-	/*
-	 * Check if the reg property exists - if not insert the node
-	 * so upon kexec() the same memory region address will be preserved.
-	 * This is needed because QBMan HW does not allow the base address/
-	 * size to be modified once set.
-	 */
-	if (!of_property_present(mem_node, "reg")) {
-		struct property *prop;
-
-		prop = devm_kzalloc(dev, sizeof(*prop), GFP_KERNEL);
-		if (!prop)
-			return -ENOMEM;
-		prop->value = res_array = devm_kzalloc(dev, sizeof(__be32) * 4,
-						       GFP_KERNEL);
-		if (!prop->value)
-			return -ENOMEM;
-		res_array[0] = cpu_to_be32(upper_32_bits(*addr));
-		res_array[1] = cpu_to_be32(lower_32_bits(*addr));
-		res_array[2] = cpu_to_be32(upper_32_bits(*size));
-		res_array[3] = cpu_to_be32(lower_32_bits(*size));
-		prop->length = sizeof(__be32) * 4;
-		prop->name = devm_kstrdup(dev, "reg", GFP_KERNEL);
-		if (!prop->name)
-			return -ENOMEM;
-		err = of_add_property(mem_node, prop);
-		if (err)
-			return err;
-	}
-
 	return 0;
+}
+
+/**
+ * qbman_find_reserved_mem_by_idx() - Find QBMan reserved-memory node
+ * @dev: Pointer to QMan or BMan device structure
+ * @idx: for BMan, pass 0 for the FBPR region.
+ *	 for QMan, pass 0 for the FQD region and 1 for the PFDR region.
+ * @addr: Pointer to storage for the region's base address.
+ * @size: Pointer to storage for the region's size.
+ */
+int qbman_find_reserved_mem_by_idx(struct device *dev, int idx,
+				   dma_addr_t *addr, size_t *size)
+{
+	struct device_node *mem_node;
+
+	mem_node = of_parse_phandle(dev->of_node, "memory-region", idx);
+	if (!mem_node)
+		return -ENODEV;
+
+	return qbman_reserved_mem_lookup(mem_node, addr, size);
+}
+
+/**
+ * qbman_find_reserved_mem_by_compatible() - Find QBMan reserved-memory node (PowerPC)
+ * @dev: Pointer to QMan or BMan device structure
+ * @compat: one of "fsl,bman-fbpr", "fsl,qman-fqd" or "fsl,qman-pfdr"
+ * @addr: Pointer to storage for the region's base address.
+ * @size: Pointer to storage for the region's size.
+ *
+ * This is a legacy variant of qbman_find_reserved_mem_by_idx(), which should
+ * only be used for backwards compatibility with certain PowerPC device trees.
+ */
+int qbman_find_reserved_mem_by_compatible(struct device *dev, const char *compat,
+					  dma_addr_t *addr, size_t *size)
+{
+	struct device_node *mem_node;
+
+	mem_node = of_find_compatible_node(NULL, NULL, compat);
+	if (!mem_node)
+		return -ENODEV;
+
+	return qbman_reserved_mem_lookup(mem_node, addr, size);
 }

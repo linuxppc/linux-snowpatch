@@ -731,6 +731,7 @@ static int fsl_qman_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct device_node *node = dev->of_node;
+	bool fqd_found_by_compatible = false;
 	struct resource *res;
 	int ret, err_irq;
 	u16 id;
@@ -779,29 +780,40 @@ static int fsl_qman_probe(struct platform_device *pdev)
 	* in order to ensure allocations from the correct regions the
 	* driver initializes then allocates each piece in order
 	*/
-	ret = qbman_init_private_mem(dev, 0, "fsl,qman-fqd", &fqd_a, &fqd_sz);
+	ret = qbman_find_reserved_mem_by_idx(dev, 0, &fqd_a, &fqd_sz);
 	if (ret) {
-		dev_err(dev, "qbman_init_private_mem() for FQD failed 0x%x\n",
-			ret);
-		return -ENODEV;
+		ret = qbman_find_reserved_mem_by_compatible(dev, "fsl,qman-fqd",
+							    &fqd_a, &fqd_sz);
+		if (ret == 0)
+			fqd_found_by_compatible = true;
 	}
+	if (ret) {
+		dev_err(dev, "Failed to find FQD reserved-memory region: %pe\n",
+			ERR_PTR(ret));
+		return ret;
+	}
+	if (fqd_found_by_compatible) {
 #ifdef CONFIG_PPC
-	/*
-	 * For PPC backward DT compatibility
-	 * FQD memory MUST be zero'd by software
-	 */
-	zero_priv_mem(fqd_a, fqd_sz);
+		/*
+		 * For PPC backward DT compatibility
+		 * FQD memory MUST be zero'd by software
+		 */
+		zero_priv_mem(fqd_a, fqd_sz);
 #else
-	WARN(1, "Unexpected architecture using non shared-dma-mem reservations");
+		WARN(1, "Unexpected architecture using non shared-dma-mem reservations");
 #endif
+	}
 	dev_dbg(dev, "Allocated FQD 0x%llx 0x%zx\n", fqd_a, fqd_sz);
 
 	/* Setup PFDR memory */
-	ret = qbman_init_private_mem(dev, 1, "fsl,qman-pfdr", &pfdr_a, &pfdr_sz);
+	ret = qbman_find_reserved_mem_by_idx(dev, 1, &pfdr_a, &pfdr_sz);
+	if (ret)
+		ret = qbman_find_reserved_mem_by_compatible(dev, "fsl,qman-pfdr",
+							    &pfdr_a, &pfdr_sz);
 	if (ret) {
-		dev_err(dev, "qbman_init_private_mem() for PFDR failed 0x%x\n",
-			ret);
-		return -ENODEV;
+		dev_err(dev, "Failed to find PFDR reserved-memory region: %pe\n",
+			ERR_PTR(ret));
+		return ret;
 	}
 	dev_dbg(dev, "Allocated PFDR 0x%llx 0x%zx\n", pfdr_a, pfdr_sz);
 

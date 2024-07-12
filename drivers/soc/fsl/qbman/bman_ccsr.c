@@ -231,11 +231,14 @@ static int fsl_bman_probe(struct platform_device *pdev)
 		return -ENODEV;
 	}
 
-	ret = qbman_init_private_mem(dev, 0, "fsl,bman-fbpr", &fbpr_a, &fbpr_sz);
+	ret = qbman_find_reserved_mem_by_idx(dev, 0, &fbpr_a, &fbpr_sz);
+	if (ret)
+		ret = qbman_find_reserved_mem_by_compatible(dev, "fsl,bman-fbpr",
+							    &fbpr_a, &fbpr_sz);
 	if (ret) {
-		dev_err(dev, "qbman_init_private_mem() failed 0x%x\n",
-			ret);
-		return -ENODEV;
+		dev_err(dev, "Failed to find FBPR reserved-memory region: %pe\n",
+			ERR_PTR(ret));
+		return ret;
 	}
 
 	dev_dbg(dev, "Allocated FBPR 0x%llx 0x%zx\n", fbpr_a, fbpr_sz);
