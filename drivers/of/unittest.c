@@ -871,7 +871,7 @@ static void __init of_unittest_changeset(void)
 	unittest(!of_changeset_add_property(&chgset, parent, ppadd), "fail add prop prop-add\n");
 	unittest(!of_changeset_update_property(&chgset, parent, ppupdate), "fail update prop\n");
 	unittest(!of_changeset_remove_property(&chgset, parent, ppremove), "fail remove prop\n");
-	n22 = of_changeset_create_node(&chgset, n2, "n22");
+	n22 = of_changeset_create_node(&chgset, NULL,  n2, "n22");
 	unittest(n22, "fail create n22\n");
 	unittest(!of_changeset_add_prop_string(&chgset, n22, "prop-str", "abcd"),
 		 "fail add prop prop-str");

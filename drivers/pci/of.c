@@ -608,18 +608,28 @@ int devm_of_pci_bridge_init(struct device *dev, struct pci_host_bridge *bridge)
 
 #ifdef CONFIG_PCI_DYNAMIC_OF_NODES
 
+void of_pci_free_node(struct device_node *np)
+{
+	struct of_changeset *cset;
+
+	cset = (struct of_changeset *)(np + 1);
+
+	np->data = NULL;
+	of_changeset_revert(cset);
+	of_changeset_destroy(cset);
+	of_node_put(np);
+}
+
 void of_pci_remove_node(struct pci_dev *pdev)
 {
 	struct device_node *np;
 
 	np = pci_device_to_OF_node(pdev);
-	if (!np || !of_node_check_flag(np, OF_DYNAMIC))
+	if (!np || np->data != of_pci_free_node)
 		return;
 	pdev->dev.of_node = NULL;
 
-	of_changeset_revert(np->data);
-	of_changeset_destroy(np->data);
-	of_node_put(np);
+	of_pci_free_node(np);
 }
 
 void of_pci_make_dev_node(struct pci_dev *pdev)
@@ -655,14 +665,18 @@ void of_pci_make_dev_node(struct pci_dev *pdev)
 	if (!name)
 		return;
 
-	cset = kmalloc(sizeof(*cset), GFP_KERNEL);
-	if (!cset)
+	np = kzalloc(sizeof(*np) + sizeof(*cset), GFP_KERNEL);
+	if (!np)
 		goto out_free_name;
+	np->full_name = name;
+	of_node_init(np);
+
+	cset = (struct of_changeset *)(np + 1);
 	of_changeset_init(cset);
 
-	np = of_changeset_create_node(cset, ppnode, name);
+	np = of_changeset_create_node(cset, np, ppnode, NULL);
 	if (!np)
-		goto out_destroy_cset;
+		goto out_free_node;
 
 	ret = of_pci_add_properties(pdev, cset, np);
 	if (ret)
@@ -670,19 +684,18 @@ void of_pci_make_dev_node(struct pci_dev *pdev)
 
 	ret = of_changeset_apply(cset);
 	if (ret)
-		goto out_free_node;
+		goto out_destroy_cset;
 
-	np->data = cset;
+	np->data = of_pci_free_node;
 	pdev->dev.of_node = np;
-	kfree(name);
 
 	return;
 
-out_free_node:
-	of_node_put(np);
 out_destroy_cset:
 	of_changeset_destroy(cset);
 	kfree(cset);
+out_free_node:
+	of_node_put(np);
 out_free_name:
 	kfree(name);
 }

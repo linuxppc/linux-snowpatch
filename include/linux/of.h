@@ -1631,6 +1631,7 @@ static inline int of_changeset_update_property(struct of_changeset *ocs,
 }
 
 struct device_node *of_changeset_create_node(struct of_changeset *ocs,
+					     struct device_node *np,
 					     struct device_node *parent,
 					     const char *full_name);
 int of_changeset_add_prop_string(struct of_changeset *ocs,

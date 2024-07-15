@@ -492,21 +492,29 @@ struct device_node *__of_node_dup(const struct device_node *np,
  * a given changeset.
  *
  * @ocs: Pointer to changeset
+ * @np: Pointer to device node. If null, allocate a new node. If not, init an
+ *	existing one.
  * @parent: Pointer to parent device node
  * @full_name: Node full name
  *
  * Return: Pointer to the created device node or NULL in case of an error.
  */
 struct device_node *of_changeset_create_node(struct of_changeset *ocs,
+					     struct device_node *np,
 					     struct device_node *parent,
 					     const char *full_name)
 {
-	struct device_node *np;
 	int ret;
 
-	np = __of_node_dup(NULL, full_name);
-	if (!np)
-		return NULL;
+	if (!np) {
+		np = __of_node_dup(NULL, full_name);
+		if (!np)
+			return NULL;
+	} else {
+		of_node_set_flag(np, OF_DYNAMIC);
+		of_node_set_flag(np, OF_DETACHED);
+	}
+
 	np->parent = parent;
 
 	ret = of_changeset_attach_node(ocs, np);
