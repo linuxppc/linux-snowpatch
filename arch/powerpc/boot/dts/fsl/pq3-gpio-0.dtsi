@@ -32,7 +32,7 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-gpio-controller@fc00 {
+gpio0: gpio-controller@fc00 {
 	#gpio-cells = <2>;
 	compatible = "fsl,pq3-gpio";
 	reg = <0xfc00 0x100>;
