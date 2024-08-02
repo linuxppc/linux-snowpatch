@@ -653,7 +653,7 @@ void of_pci_remove_node(struct pci_dev *pdev)
 	struct device_node *np;
 
 	np = pci_device_to_OF_node(pdev);
-	if (!np || !of_node_check_flag(np, OF_DYNAMIC))
+	if (!np || !of_node_check_flag(np, OF_CREATE_WITH_CSET))
 		return;
 	pdev->dev.of_node = NULL;
 
@@ -712,6 +712,7 @@ void of_pci_make_dev_node(struct pci_dev *pdev)
 	if (ret)
 		goto out_free_node;
 
+	of_node_set_flag(np, OF_CREATE_WITH_CSET);
 	np->data = cset;
 	pdev->dev.of_node = np;
 	kfree(name);

@@ -153,6 +153,7 @@ extern struct device_node *of_stdout;
 #define OF_POPULATED_BUS	4 /* platform bus created for children */
 #define OF_OVERLAY		5 /* allocated for an overlay */
 #define OF_OVERLAY_FREE_CSET	6 /* in overlay cset being freed */
+#define OF_CREATE_WITH_CSET	7 /* Created by of_changeset_create_node */
 
 #define OF_BAD_ADDR	((u64)-1)
 
