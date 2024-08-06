@@ -11,6 +11,7 @@
 #include <linux/cleanup.h>
 #include <linux/cpu.h>
 #include <linux/cpufreq.h>
+#include <linux/cpu_smt.h>
 #include <linux/device.h>
 #include <linux/of.h>
 #include <linux/slab.h>
@@ -531,6 +532,16 @@ static int __init get_cpu_for_node(struct device_node *node)
 	return cpu;
 }
 
+static void __init update_smt_num_threads(unsigned int num_threads)
+{
+	static unsigned int max_smt_thread_num = 1;
+
+	if (num_threads > max_smt_thread_num) {
+		max_smt_thread_num = num_threads;
+		cpu_smt_set_num_threads(max_smt_thread_num, max_smt_thread_num);
+	}
+}
+
 static int __init parse_core(struct device_node *core, int package_id,
 			     int cluster_id, int core_id)
 {
@@ -560,6 +571,8 @@ static int __init parse_core(struct device_node *core, int package_id,
 		}
 		i++;
 	} while (1);
+
+	update_smt_num_threads(i);
 
 	cpu = get_cpu_for_node(core);
 	if (cpu >= 0) {
