@@ -119,7 +119,7 @@ enum sndrv_compress_encoder {
 
 /**
  * struct snd_compr_metadata - compressed stream metadata
- * @key: key id
+ * @key: key id, value larger than 0x80000000 reserved for driver private usage
  * @value: key value
  */
 struct snd_compr_metadata {
