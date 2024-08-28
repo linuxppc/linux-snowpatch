@@ -72,11 +72,6 @@ static void cxl_pci_reset_secondary_bus(struct pci_dev *dev)
 	/* Should we do an AFU reset here ? */
 }
 
-static int cxl_pcie_cfg_record(u8 bus, u8 devfn)
-{
-	return (bus << 8) + devfn;
-}
-
 static inline struct cxl_afu *pci_bus_to_afu(struct pci_bus *bus)
 {
 	struct pci_controller *phb = bus ? pci_bus_to_host(bus) : NULL;
@@ -99,7 +94,7 @@ static inline int cxl_pcie_config_info(struct pci_bus *bus, unsigned int devfn,
 {
 	int record;
 
-	record = cxl_pcie_cfg_record(bus->number, devfn);
+	record = PCI_DEVID(bus->number, devfn);
 	if (record > afu->crs_num)
 		return PCIBIOS_DEVICE_NOT_FOUND;
 
@@ -302,8 +297,3 @@ struct cxl_afu *cxl_pci_to_afu(struct pci_dev *dev)
 }
 EXPORT_SYMBOL_GPL(cxl_pci_to_afu);
 
-unsigned int cxl_pci_to_cfg_record(struct pci_dev *dev)
-{
-	return cxl_pcie_cfg_record(dev->bus->number, dev->devfn);
-}
-EXPORT_SYMBOL_GPL(cxl_pci_to_cfg_record);

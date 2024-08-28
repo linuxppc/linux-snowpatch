@@ -23,10 +23,6 @@
 /* Get the AFU associated with a pci_dev */
 struct cxl_afu *cxl_pci_to_afu(struct pci_dev *dev);
 
-/* Get the AFU conf record number associated with a pci_dev */
-unsigned int cxl_pci_to_cfg_record(struct pci_dev *dev);
-
-
 /*
  * Context lifetime overview:
  *
