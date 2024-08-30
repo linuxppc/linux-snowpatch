@@ -441,7 +441,6 @@ static inline int tsa_of_parse_tdm_tx_route(struct tsa *tsa,
 
 static int tsa_of_parse_tdms(struct tsa *tsa, struct device_node *np)
 {
-	struct device_node *tdm_np;
 	struct tsa_tdm *tdm;
 	struct clk *clk;
 	u32 tdm_id, val;
@@ -452,13 +451,10 @@ static int tsa_of_parse_tdms(struct tsa *tsa, struct device_node *np)
 	tsa->tdm[0].is_enable = false;
 	tsa->tdm[1].is_enable = false;
 
-	for_each_available_child_of_node(np, tdm_np) {
+	for_each_available_child_of_node_scoped(np, tdm_np) {
 		ret = of_property_read_u32(tdm_np, "reg", &tdm_id);
-		if (ret) {
-			dev_err(tsa->dev, "%pOF: failed to read reg\n", tdm_np);
-			of_node_put(tdm_np);
-			return ret;
-		}
+		if (ret)
+			return dev_err_probe(tsa->dev, ret, "%pOF: failed to read reg\n", tdm_np);
 		switch (tdm_id) {
 		case 0:
 			tsa->tdms |= BIT(TSA_TDMA);
@@ -467,20 +463,15 @@ static int tsa_of_parse_tdms(struct tsa *tsa, struct device_node *np)
 			tsa->tdms |= BIT(TSA_TDMB);
 			break;
 		default:
-			dev_err(tsa->dev, "%pOF: Invalid tdm_id (%u)\n", tdm_np,
-				tdm_id);
-			of_node_put(tdm_np);
-			return -EINVAL;
+			return dev_err_probe(tsa->dev, -EINVAL, "%pOF: Invalid tdm_id (%u)\n",
+					     tdm_np, tdm_id);
 		}
 	}
 
-	for_each_available_child_of_node(np, tdm_np) {
+	for_each_available_child_of_node_scoped(np, tdm_np) {
 		ret = of_property_read_u32(tdm_np, "reg", &tdm_id);
-		if (ret) {
-			dev_err(tsa->dev, "%pOF: failed to read reg\n", tdm_np);
-			of_node_put(tdm_np);
-			return ret;
-		}
+		if (ret)
+			return dev_err_probe(tsa->dev, ret, "%pOF: failed to read reg\n", tdm_np);
 
 		tdm = &tsa->tdm[tdm_id];
 		tdm->simode_tdm = TSA_SIMODE_TDM_SDM_NORM;
@@ -488,39 +479,26 @@ static int tsa_of_parse_tdms(struct tsa *tsa, struct device_node *np)
 		val = 0;
 		ret = of_property_read_u32(tdm_np, "fsl,rx-frame-sync-delay-bits",
 					   &val);
-		if (ret && ret != -EINVAL) {
-			dev_err(tsa->dev,
-				"%pOF: failed to read fsl,rx-frame-sync-delay-bits\n",
-				tdm_np);
-			of_node_put(tdm_np);
-			return ret;
-		}
-		if (val > 3) {
-			dev_err(tsa->dev,
-				"%pOF: Invalid fsl,rx-frame-sync-delay-bits (%u)\n",
-				tdm_np, val);
-			of_node_put(tdm_np);
-			return -EINVAL;
-		}
+		if (ret && ret != -EINVAL)
+			return dev_err_probe(tsa->dev, ret,
+					     "%pOF: failed to read fsl,rx-frame-sync-delay-bits\n",
+					     tdm_np);
+		if (val > 3)
+			return dev_err_probe(tsa->dev, -EINVAL,
+					     "%pOF: Invalid fsl,rx-frame-sync-delay-bits (%u)\n",
+					     tdm_np, val);
 		tdm->simode_tdm |= TSA_SIMODE_TDM_RFSD(val);
 
 		val = 0;
 		ret = of_property_read_u32(tdm_np, "fsl,tx-frame-sync-delay-bits",
 					   &val);
-		if (ret && ret != -EINVAL) {
-			dev_err(tsa->dev,
-				"%pOF: failed to read fsl,tx-frame-sync-delay-bits\n",
-				tdm_np);
-			of_node_put(tdm_np);
-			return ret;
-		}
-		if (val > 3) {
-			dev_err(tsa->dev,
-				"%pOF: Invalid fsl,tx-frame-sync-delay-bits (%u)\n",
-				tdm_np, val);
-			of_node_put(tdm_np);
-			return -EINVAL;
-		}
+		if (ret && ret != -EINVAL)
+			return dev_err_probe(tsa->dev, ret,
+				"%pOF: failed to read fsl,tx-frame-sync-delay-bits\n", tdm_np);
+		if (val > 3)
+			return dev_err_probe(tsa->dev, -EINVAL,
+					     "%pOF: Invalid fsl,tx-frame-sync-delay-bits (%u)\n",
+					     tdm_np, val);
 		tdm->simode_tdm |= TSA_SIMODE_TDM_TFSD(val);
 
 		if (of_property_read_bool(tdm_np, "fsl,common-rxtx-pins"))
@@ -538,13 +516,11 @@ static int tsa_of_parse_tdms(struct tsa *tsa, struct device_node *np)
 		clk = of_clk_get_by_name(tdm_np, "l1rsync");
 		if (IS_ERR(clk)) {
 			ret = PTR_ERR(clk);
-			of_node_put(tdm_np);
 			goto err;
 		}
 		ret = clk_prepare_enable(clk);
 		if (ret) {
 			clk_put(clk);
-			of_node_put(tdm_np);
 			goto err;
 		}
 		tdm->l1rsync_clk = clk;
@@ -552,13 +528,11 @@ static int tsa_of_parse_tdms(struct tsa *tsa, struct device_node *np)
 		clk = of_clk_get_by_name(tdm_np, "l1rclk");
 		if (IS_ERR(clk)) {
 			ret = PTR_ERR(clk);
-			of_node_put(tdm_np);
 			goto err;
 		}
 		ret = clk_prepare_enable(clk);
 		if (ret) {
 			clk_put(clk);
-			of_node_put(tdm_np);
 			goto err;
 		}
 		tdm->l1rclk_clk = clk;
@@ -567,13 +541,11 @@ static int tsa_of_parse_tdms(struct tsa *tsa, struct device_node *np)
 			clk = of_clk_get_by_name(tdm_np, "l1tsync");
 			if (IS_ERR(clk)) {
 				ret = PTR_ERR(clk);
-				of_node_put(tdm_np);
 				goto err;
 			}
 			ret = clk_prepare_enable(clk);
 			if (ret) {
 				clk_put(clk);
-				of_node_put(tdm_np);
 				goto err;
 			}
 			tdm->l1tsync_clk = clk;
@@ -581,29 +553,23 @@ static int tsa_of_parse_tdms(struct tsa *tsa, struct device_node *np)
 			clk = of_clk_get_by_name(tdm_np, "l1tclk");
 			if (IS_ERR(clk)) {
 				ret = PTR_ERR(clk);
-				of_node_put(tdm_np);
 				goto err;
 			}
 			ret = clk_prepare_enable(clk);
 			if (ret) {
 				clk_put(clk);
-				of_node_put(tdm_np);
 				goto err;
 			}
 			tdm->l1tclk_clk = clk;
 		}
 
 		ret = tsa_of_parse_tdm_rx_route(tsa, tdm_np, tsa->tdms, tdm_id);
-		if (ret) {
-			of_node_put(tdm_np);
+		if (ret)
 			goto err;
-		}
 
 		ret = tsa_of_parse_tdm_tx_route(tsa, tdm_np, tsa->tdms, tdm_id);
-		if (ret) {
-			of_node_put(tdm_np);
+		if (ret)
 			goto err;
-		}
 
 		tdm->is_enable = true;
 	}
@@ -665,10 +631,8 @@ static int tsa_probe(struct platform_device *pdev)
 		return PTR_ERR(tsa->si_regs);
 
 	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "si_ram");
-	if (!res) {
-		dev_err(tsa->dev, "si_ram resource missing\n");
-		return -EINVAL;
-	}
+	if (!res)
+		return dev_err_probe(tsa->dev, -EINVAL, "si_ram resource missing\n");
 	tsa->si_ram_sz = resource_size(res);
 	tsa->si_ram = devm_ioremap_resource(&pdev->dev, res);
 	if (IS_ERR(tsa->si_ram))
