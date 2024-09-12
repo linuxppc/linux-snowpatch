@@ -23,6 +23,7 @@
 #include <linux/mman.h>
 #include <linux/mm.h>
 #include <linux/interrupt.h>
+#include <linux/entry-common.h>
 #include <linux/highmem.h>
 #include <linux/extable.h>
 #include <linux/kprobes.h>
@@ -578,15 +579,19 @@ NOKPROBE_SYMBOL(___do_page_fault);
 static __always_inline void __do_page_fault(struct pt_regs *regs)
 {
 	long err;
+	irqentry_state_t state = irqentry_enter(regs);
 
 	err = ___do_page_fault(regs, regs->dar, regs->dsisr);
 	if (unlikely(err))
 		bad_page_fault(regs, err);
+	irqentry_exit(regs, state);
 }
 
 DEFINE_INTERRUPT_HANDLER(do_page_fault)
 {
+	irqentry_state_t state = irqentry_enter(regs);
 	__do_page_fault(regs);
+	irqentry_exit(regs, state);
 }
 
 #ifdef CONFIG_PPC_BOOK3S_64
