@@ -133,12 +133,14 @@ copy_user_generic(void *to, const void *from, unsigned long len)
 static __always_inline __must_check unsigned long
 raw_copy_from_user(void *dst, const void __user *src, unsigned long size)
 {
+	src = mask_user_address(src);
 	return copy_user_generic(dst, (__force void *)src, size);
 }
 
 static __always_inline __must_check unsigned long
 raw_copy_to_user(void __user *dst, const void *src, unsigned long size)
 {
+	dst = mask_user_address(dst);
 	return copy_user_generic((__force void *)dst, src, size);
 }
 
@@ -197,7 +199,7 @@ static __always_inline __must_check unsigned long __clear_user(void __user *addr
 static __always_inline unsigned long clear_user(void __user *to, unsigned long n)
 {
 	if (__access_ok(to, n))
-		return __clear_user(to, n);
+		return __clear_user(mask_user_address(to), n);
 	return n;
 }
 #endif /* _ASM_X86_UACCESS_64_H */
