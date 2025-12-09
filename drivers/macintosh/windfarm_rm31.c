@@ -696,7 +696,7 @@ static int __init wf_rm31_init(void)
 	if (nr_chips > NR_CHIPS)
 		nr_chips = NR_CHIPS;
 
-	pr_info("windfarm: Initializing for desktop G5 with %d chips\n",
+	pr_info("windfarm: Initializing for server G5 with %d chips\n",
 		nr_chips);
 
 	/* Get MPU data for each CPU */
