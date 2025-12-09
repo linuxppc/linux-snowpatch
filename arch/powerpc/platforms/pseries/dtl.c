@@ -37,6 +37,14 @@ static u8 dtl_event_mask = DTL_LOG_ALL;
  */
 static int dtl_buf_entries = N_DISPATCH_LOG;
 
+/*
+ * dtl_count indicates the number and type of dtl users.
+ *  0 indicates no active users of dtl / vcpu_dispatchstats.
+ * -1 indicates vcpudispatch_stats user is active.
+ * 1 and above indicates active dtl users.
+ */
+atomic_t dtl_count;
+
 #ifdef CONFIG_VIRT_CPU_ACCOUNTING_NATIVE
 
 /*
@@ -55,8 +63,6 @@ struct dtl_ring {
 };
 
 static DEFINE_PER_CPU(struct dtl_ring, dtl_rings);
-
-static atomic_t dtl_count;
 
 /*
  * The cpu accounting code controls the DTL ring buffer, and we get
@@ -158,7 +164,7 @@ static int dtl_start(struct dtl *dtl)
 
 	/* enable event logging */
 	lppaca_of(dtl->cpu).dtl_enable_mask = dtl_event_mask;
-
+	atomic_inc(&dtl_count);
 	return 0;
 }
 
@@ -169,6 +175,7 @@ static void dtl_stop(struct dtl *dtl)
 	lppaca_of(dtl->cpu).dtl_enable_mask = 0x0;
 
 	unregister_dtl(hwcpu);
+	atomic_dec(&dtl_count);
 }
 
 static u64 dtl_current_index(struct dtl *dtl)
@@ -193,6 +200,11 @@ static int dtl_enable(struct dtl *dtl)
 	/* ensure there are no other conflicting dtl users */
 	if (!down_read_trylock(&dtl_access_lock))
 		return -EBUSY;
+
+	if (atomic_read(&dtl_count) == -1) {
+		up_read(&dtl_access_lock);
+		return -EBUSY;
+	}
 
 	n_entries = dtl_buf_entries;
 	buf = kmem_cache_alloc_node(dtl_cache, GFP_KERNEL, cpu_to_node(dtl->cpu));
