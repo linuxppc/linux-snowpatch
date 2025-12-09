@@ -659,18 +659,78 @@ static int __init vcpudispatch_stats_procfs_init(void)
 machine_device_initcall(pseries, vcpudispatch_stats_procfs_init);
 
 #ifdef CONFIG_PARAVIRT_TIME_ACCOUNTING
+#define STEAL_MULTIPLE (STEAL_RATIO * STEAL_RATIO)
+
+static u8 steal_interval = 1;
+
+static bool should_cpu_process_steal(int cpu)
+{
+	if (cpu == cpumask_first(cpu_online_mask))
+		return true;
+
+	return false;
+}
+
+extern bool process_steal_enable;
+static void process_steal(int cpu)
+{
+	unsigned long steal_ratio, delta_tb, interval_tb;
+	static unsigned long next_tb, prev_steal;
+	unsigned long tb = mftb();
+	unsigned long steal = 0;
+	unsigned int i;
+
+	if (!process_steal_enable)
+		return;
+
+	if (!should_cpu_process_steal(cpu))
+		return;
+
+	if (tb < next_tb)
+		return;
+
+	for_each_online_cpu(i) {
+		struct lppaca *lppaca = &lppaca_of(i);
+
+		steal += be64_to_cpu(READ_ONCE(lppaca->ready_enqueue_tb));
+		steal += be64_to_cpu(READ_ONCE(lppaca->enqueue_dispatch_tb));
+	}
+
+	if (!steal_interval)
+		steal_interval = 1;
+
+	interval_tb = steal_interval * tb_ticks_per_sec;
+	if (next_tb && prev_steal) {
+		delta_tb = max(tb - (next_tb - interval_tb), 1);
+		steal_ratio = (steal - prev_steal) * STEAL_MULTIPLE;
+		steal_ratio /= (delta_tb * num_online_cpus());
+		trigger_softoffline(steal_ratio);
+	}
+
+	next_tb = tb + interval_tb;
+	prev_steal = steal;
+}
+
 u64 pseries_paravirt_steal_clock(int cpu)
 {
 	struct lppaca *lppaca = &lppaca_of(cpu);
+	unsigned long steal;
+
+	steal = be64_to_cpu(READ_ONCE(lppaca->ready_enqueue_tb));
+	steal += be64_to_cpu(READ_ONCE(lppaca->enqueue_dispatch_tb));
+
+	if (is_shared_processor() && !is_kvm_guest())
+		process_steal(cpu);
 
 	/*
 	 * VPA steal time counters are reported at TB frequency. Hence do a
-	 * conversion to ns before returning
+	 * conversion to ns before using.
 	 */
-	return tb_to_ns(be64_to_cpu(READ_ONCE(lppaca->enqueue_dispatch_tb)) +
-			be64_to_cpu(READ_ONCE(lppaca->ready_enqueue_tb)));
+	steal = tb_to_ns(steal);
+
+	return steal;
 }
-#endif
+#endif /* CONFIG_PARAVIRT_TIME_ACCOUNTING */
 
 #endif /* CONFIG_PPC_SPLPAR */
 
@@ -2025,6 +2085,9 @@ static int __init vpa_debugfs_init(void)
 		debugfs_create_file(name, 0400, vpa_dir, (void *)i, &vpa_fops);
 	}
 
+#ifdef CONFIG_PARAVIRT_TIME_ACCOUNTING
+	debugfs_create_u8("steal_interval_secs", 0600, arch_debugfs_dir, &steal_interval);
+#endif
 	return 0;
 }
 machine_arch_initcall(pseries, vpa_debugfs_init);

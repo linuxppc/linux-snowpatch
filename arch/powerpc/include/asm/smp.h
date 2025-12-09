@@ -60,6 +60,9 @@ struct smp_ops_t {
 #ifdef CONFIG_HOTPLUG_CPU
 	void  (*cpu_offline_self)(void);
 #endif
+#ifdef CONFIG_PPC_SPLPAR
+	unsigned int (*num_available_cores)(void);
+#endif
 };
 
 extern struct task_struct *secondary_current;
@@ -266,6 +269,9 @@ extern char __secondary_hold;
 extern unsigned int booting_thread_hwid;
 
 extern void __early_start(void);
+#ifdef CONFIG_PPC_SPLPAR
+int arch_update_cpu_topology(void);
+#endif /* CONFIG_PPC_SPLPAR */
 #endif /* __ASSEMBLER__ */
 
 #endif /* __KERNEL__ */

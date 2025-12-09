@@ -26,6 +26,10 @@ void pSeries_machine_check_log_err(void);
 #ifdef CONFIG_SMP
 extern void smp_init_pseries(void);
 
+#ifdef CONFIG_PPC_SPLPAR
+#define STEAL_RATIO 100
+#endif
+
 /* Get state of physical CPU from query_cpu_stopped */
 int smp_query_cpu_stopped(unsigned int pcpu);
 #define QCSS_STOPPED 0
@@ -115,6 +119,10 @@ int dlpar_workqueue_init(void);
 
 extern u32 pseries_security_flavor;
 void pseries_setup_security_mitigations(void);
+#ifdef CONFIG_PPC_SPLPAR
+void trigger_softoffline(unsigned long steal_ratio);
+unsigned int pseries_num_available_cores(void);
+#endif
 
 #ifdef CONFIG_PPC_64S_HASH_MMU
 void pseries_lpar_read_hblkrm_characteristics(void);

@@ -82,6 +82,9 @@ bool has_big_cores __ro_after_init;
 bool coregroup_enabled __ro_after_init;
 bool thread_group_shares_l2 __ro_after_init;
 bool thread_group_shares_l3 __ro_after_init;
+#ifdef CONFIG_PPC_SPLPAR
+bool process_steal_enable __ro_after_init;
+#endif
 
 DEFINE_PER_CPU(cpumask_var_t, cpu_sibling_map);
 DEFINE_PER_CPU(cpumask_var_t, cpu_smallcore_map);
@@ -1755,6 +1758,16 @@ void __init smp_cpus_done(unsigned int max_cpus)
 
 	dump_numa_cpu_topology();
 	build_sched_topology();
+
+#ifdef CONFIG_PPC_SPLPAR
+	if (smp_ops->num_available_cores)
+		smp_ops->num_available_cores();
+
+	if (is_shared_processor() && !is_kvm_guest())
+		process_steal_enable = true;
+	else
+		process_steal_enable = false;
+#endif
 }
 
 /*
@@ -1821,3 +1834,28 @@ void __noreturn arch_cpu_idle_dead(void)
 }
 
 #endif
+
+#ifdef CONFIG_PPC_SPLPAR
+#define MIN_CAPACITY 1
+
+/*
+ * Assume CPU capacity to be low if CPU number happens be above soft
+ * available limit. This forces load balancer to prefer higher capacity CPUs
+ */
+unsigned long arch_scale_cpu_capacity(int cpu)
+{
+	if (is_shared_processor() && !is_kvm_guest()) {
+		if (!cpu_active(cpu))
+			return MIN_CAPACITY;
+	}
+	return SCHED_CAPACITY_SCALE;
+}
+
+int arch_update_cpu_topology(void)
+{
+	if (is_shared_processor() && !is_kvm_guest())
+		return (num_online_cpus() != cpumask_weight(cpu_active_mask));
+
+	return 0;
+}
+#endif /* CONFIG_PPC_SPLPAR */
