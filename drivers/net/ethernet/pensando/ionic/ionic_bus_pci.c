@@ -329,10 +329,8 @@ static int ionic_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 		goto err_out;
 	}
 
-#ifdef CONFIG_PPC64
 	/* Ensure MSI/MSI-X interrupts lie within addressable physical memory */
-	pdev->no_64bit_msi = 1;
-#endif
+	pdev->msi_addr_mask = DMA_BIT_MASK(IONIC_ADDR_LEN);
 
 	err = ionic_setup_one(ionic);
 	if (err)
