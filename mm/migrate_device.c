@@ -199,6 +199,8 @@ static int migrate_vma_collect_huge_pmd(pmd_t *pmdp, unsigned long start,
 		(migrate->flags & MIGRATE_VMA_SELECT_COMPOUND) &&
 		(IS_ALIGNED(start, HPAGE_PMD_SIZE) &&
 		 IS_ALIGNED(end, HPAGE_PMD_SIZE))) {
+		unsigned long device_private = 0;
+		unsigned long pfn;
 
 		struct page_vma_mapped_walk pvmw = {
 			.ptl = ptl,
@@ -207,11 +209,17 @@ static int migrate_vma_collect_huge_pmd(pmd_t *pmdp, unsigned long start,
 			.vma = walk->vma,
 		};
 
-		unsigned long pfn = page_to_pfn(folio_page(folio, 0));
+		if (folio_is_device_private(folio)) {
+			pfn = device_private_folio_to_offset(folio);
+			device_private = MIGRATE_PFN_DEVICE;
+		} else {
+			pfn = page_to_pfn(folio_page(folio, 0));
+		}
 
 		migrate->src[migrate->npages] = migrate_pfn(pfn) | write
 						| MIGRATE_PFN_MIGRATE
-						| MIGRATE_PFN_COMPOUND;
+						| MIGRATE_PFN_COMPOUND
+						| device_private;
 		migrate->dst[migrate->npages++] = 0;
 		migrate->cpages++;
 		ret = set_pmd_migration_entry(&pvmw, folio_page(folio, 0));
@@ -328,8 +336,9 @@ again:
 				goto again;
 			}
 
-			mpfn = migrate_pfn(page_to_pfn(page)) |
-					MIGRATE_PFN_MIGRATE;
+			mpfn = migrate_pfn(device_private_page_to_offset(page)) |
+					MIGRATE_PFN_MIGRATE |
+					MIGRATE_PFN_DEVICE;
 			if (softleaf_is_device_private_write(entry))
 				mpfn |= MIGRATE_PFN_WRITE;
 		} else {
@@ -433,14 +442,14 @@ again:
 
 			/* Setup special migration page table entry */
 			if (mpfn & MIGRATE_PFN_WRITE)
-				entry = make_writable_migration_entry(
-							page_to_pfn(page));
+				entry = make_writable_migration_entry_from_page(
+							page);
 			else if (anon_exclusive)
-				entry = make_readable_exclusive_migration_entry(
-							page_to_pfn(page));
+				entry = make_readable_exclusive_migration_entry_from_page(
+							page);
 			else
-				entry = make_readable_migration_entry(
-							page_to_pfn(page));
+				entry = make_readable_migration_entry_from_page(
+							page);
 			if (pte_present(pte)) {
 				if (pte_young(pte))
 					entry = make_migration_entry_young(entry);
@@ -837,11 +846,9 @@ static int migrate_vma_insert_huge_pmd_page(struct migrate_vma *migrate,
 		swp_entry_t swp_entry;
 
 		if (vma->vm_flags & VM_WRITE)
-			swp_entry = make_writable_device_private_entry(
-						page_to_pfn(page));
+			swp_entry = make_writable_device_private_entry_from_page(page);
 		else
-			swp_entry = make_readable_device_private_entry(
-						page_to_pfn(page));
+			swp_entry = make_readable_device_private_entry_from_page(page);
 		entry = swp_entry_to_pmd(swp_entry);
 	} else {
 		if (folio_is_zone_device(folio) &&
@@ -1034,11 +1041,9 @@ static void migrate_vma_insert_page(struct migrate_vma *migrate,
 		swp_entry_t swp_entry;
 
 		if (vma->vm_flags & VM_WRITE)
-			swp_entry = make_writable_device_private_entry(
-						page_to_pfn(page));
+			swp_entry = make_writable_device_private_entry_from_page(page);
 		else
-			swp_entry = make_readable_device_private_entry(
-						page_to_pfn(page));
+			swp_entry = make_readable_device_private_entry_from_page(page);
 		entry = swp_entry_to_pte(swp_entry);
 	} else {
 		if (folio_is_zone_device(folio) &&
@@ -1359,7 +1364,7 @@ static unsigned long migrate_device_pfn_lock(unsigned long pfn)
 {
 	struct folio *folio;
 
-	folio = folio_get_nontail_page(pfn_to_page(pfn));
+	folio = folio_get_nontail_page(device_private_offset_to_page(pfn));
 	if (!folio)
 		return 0;
 
@@ -1368,7 +1373,7 @@ static unsigned long migrate_device_pfn_lock(unsigned long pfn)
 		return 0;
 	}
 
-	return migrate_pfn(pfn) | MIGRATE_PFN_MIGRATE;
+	return migrate_pfn(pfn) | MIGRATE_PFN_MIGRATE | MIGRATE_PFN_DEVICE;
 }
 
 /**
