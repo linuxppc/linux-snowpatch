@@ -206,6 +206,9 @@ struct bpf_prog *bpf_int_jit_compile(struct bpf_prog *fp)
 	cgctx.stack_size = round_up(fp->aux->stack_depth, 16);
 	cgctx.arena_vm_start = bpf_arena_get_kern_vm_start(fp->aux->arena);
 	cgctx.user_vm_start = bpf_arena_get_user_vm_start(fp->aux->arena);
+	cgctx.is_subprog = bpf_is_subprog(fp);
+	cgctx.exception_boundary = fp->aux->exception_boundary;
+	cgctx.exception_cb = fp->aux->exception_cb;
 
 	/* Scouting faux-generate pass 0 */
 	if (bpf_jit_build_body(fp, NULL, NULL, &cgctx, addrs, 0, false)) {
@@ -435,6 +438,16 @@ void bpf_jit_free(struct bpf_prog *fp)
 	bpf_prog_unlock_free(fp);
 }
 
+bool bpf_jit_supports_exceptions(void)
+{
+       return IS_ENABLED(CONFIG_PPC64);
+}
+
+bool bpf_jit_supports_subprog_tailcalls(void)
+{
+	return IS_ENABLED(CONFIG_PPC64);
+}
+
 bool bpf_jit_supports_kfunc_call(void)
 {
 	return true;
@@ -506,7 +519,7 @@ static int invoke_bpf_prog(u32 *image, u32 *ro_image, struct codegen_context *ct
 
 	/* __bpf_prog_enter(p, &bpf_tramp_run_ctx) */
 	PPC_LI_ADDR(_R3, p);
-	EMIT(PPC_RAW_MR(_R25, _R3));
+	EMIT(PPC_RAW_MR(_R26, _R3));
 	EMIT(PPC_RAW_ADDI(_R4, _R1, run_ctx_off));
 	ret = bpf_jit_emit_func_call_rel(image, ro_image, ctx,
 					 (unsigned long)bpf_trampoline_enter(p));
@@ -514,7 +527,7 @@ static int invoke_bpf_prog(u32 *image, u32 *ro_image, struct codegen_context *ct
 		return ret;
 
 	/* Remember prog start time returned by __bpf_prog_enter */
-	EMIT(PPC_RAW_MR(_R26, _R3));
+	EMIT(PPC_RAW_MR(_R27, _R3));
 
 	/*
 	 * if (__bpf_prog_enter(p) == 0)
@@ -537,7 +550,7 @@ static int invoke_bpf_prog(u32 *image, u32 *ro_image, struct codegen_context *ct
 		image[ctx->idx] = ppc_inst_val(branch_insn);
 		ctx->idx++;
 	} else {
-		EMIT(PPC_RAW_LL(_R12, _R25, offsetof(struct bpf_prog, bpf_func)));
+		EMIT(PPC_RAW_LL(_R12, _R26, offsetof(struct bpf_prog, bpf_func)));
 		EMIT(PPC_RAW_MTCTR(_R12));
 		EMIT(PPC_RAW_BCTRL());
 	}
@@ -554,8 +567,8 @@ static int invoke_bpf_prog(u32 *image, u32 *ro_image, struct codegen_context *ct
 	}
 
 	/* __bpf_prog_exit(p, start_time, &bpf_tramp_run_ctx) */
-	EMIT(PPC_RAW_MR(_R3, _R25));
-	EMIT(PPC_RAW_MR(_R4, _R26));
+	EMIT(PPC_RAW_MR(_R3, _R26));
+	EMIT(PPC_RAW_MR(_R4, _R27));
 	EMIT(PPC_RAW_ADDI(_R5, _R1, run_ctx_off));
 	ret = bpf_jit_emit_func_call_rel(image, ro_image, ctx,
 					 (unsigned long)bpf_trampoline_exit(p));
@@ -600,15 +613,42 @@ static int invoke_bpf_mod_ret(u32 *image, u32 *ro_image, struct codegen_context 
 	return 0;
 }
 
-static void bpf_trampoline_setup_tail_call_cnt(u32 *image, struct codegen_context *ctx,
-					       int func_frame_offset, int r4_off)
+/*
+ * Refer the label 'Generated stack layout' in this file for actual stack
+ * layout during trampoline invocation.
+ *
+ * Refer __arch_prepare_bpf_trampoline() for stack component details.
+ *
+ * The tailcall count/reference is present in caller's stack frame. Its required
+ * to copy the content of tail_call_info before calling the actual function
+ * to which the trampoline is attached.
+ *
+ */
+
+static void bpf_trampoline_setup_tail_call_info(u32 *image, struct codegen_context *ctx,
+					       int func_frame_offset,
+					       int bpf_dummy_frame_size, int r4_off)
 {
 	if (IS_ENABLED(CONFIG_PPC64)) {
-		/* See bpf_jit_stack_tailcallcnt() */
-		int tailcallcnt_offset = 7 * 8;
+		/* See bpf_jit_stack_tailcallinfo_offset() */
+		int tailcallinfo_offset = BPF_PPC_STACK_SAVE + SZL;
+		/*
+		 * func_frame_offset =
+		 * 	bpf_dummy_frame_size + trampoline_frame_size
+		 */
+		EMIT(PPC_RAW_LD(_R4, _R1, func_frame_offset));
+		EMIT(PPC_RAW_LD(_R3, _R4, -tailcallinfo_offset));
 
-		EMIT(PPC_RAW_LL(_R3, _R1, func_frame_offset - tailcallcnt_offset));
-		EMIT(PPC_RAW_STL(_R3, _R1, -tailcallcnt_offset));
+		/*
+		 * Setting the tail_call_info in trampoline's frame
+		 * depending on if previous frame had value or reference.
+		 */
+		EMIT(PPC_RAW_CMPLWI(_R3, MAX_TAIL_CALL_CNT));
+		PPC_COND_BRANCH(COND_GT, CTX_NIA(ctx) + 8);
+		EMIT(PPC_RAW_ADDI(_R3, _R4, bpf_jit_stack_tailcallinfo_offset(ctx)));
+		EMIT(PPC_RAW_STL(_R3, _R1, func_frame_offset
+				- bpf_dummy_frame_size - tailcallinfo_offset));
+
 	} else {
 		/* See bpf_jit_stack_offsetof() and BPF_PPC_TC */
 		EMIT(PPC_RAW_LL(_R4, _R1, r4_off));
@@ -619,7 +659,7 @@ static void bpf_trampoline_restore_tail_call_cnt(u32 *image, struct codegen_cont
 						 int func_frame_offset, int r4_off)
 {
 	if (IS_ENABLED(CONFIG_PPC64)) {
-		/* See bpf_jit_stack_tailcallcnt() */
+		/* See bpf_jit_stack_tailcallinfo_offset() */
 		int tailcallcnt_offset = 7 * 8;
 
 		EMIT(PPC_RAW_LL(_R3, _R1, -tailcallcnt_offset));
@@ -715,10 +755,10 @@ static int __arch_prepare_bpf_trampoline(struct bpf_tramp_image *im, void *rw_im
 	 *                              [ r0 save (32-bit)  ]   |
 	 * dummy frame for unwind       [ back chain 1      ] --
 	 *                              [ padding           ] align stack frame
+	 *       nvr_off                [ r26..r31          ] nvr save : BPF_PPC_STACK_SAVE
+	 *                              [ tail_call_info    ] non optional - 64-bit powerpc
 	 *       r4_off                 [ r4 (tailcallcnt)  ] optional - 32-bit powerpc
 	 *       alt_lr_off             [ real lr (ool stub)] optional - actual lr
-	 *                              [ r26               ]
-	 *       nvr_off                [ r25               ] nvr save area
 	 *       retval_off             [ return value      ]
 	 *                              [ reg argN          ]
 	 *                              [ ...               ]
@@ -776,10 +816,6 @@ static int __arch_prepare_bpf_trampoline(struct bpf_tramp_image *im, void *rw_im
 	if (save_ret)
 		bpf_frame_size += SZL;
 
-	/* Room for nvr save area */
-	nvr_off = bpf_frame_size;
-	bpf_frame_size += 2 * SZL;
-
 	/* Optional save area for actual LR in case of ool ftrace */
 	if (IS_ENABLED(CONFIG_PPC_FTRACE_OUT_OF_LINE)) {
 		alt_lr_off = bpf_frame_size;
@@ -794,6 +830,13 @@ static int __arch_prepare_bpf_trampoline(struct bpf_tramp_image *im, void *rw_im
 			r4_off = regs_off + SZL;
 		}
 	}
+
+	/* Room for 64-bit tail_call_cnt */
+	bpf_frame_size += SZL;
+
+	/* Room for nvr save area */
+	nvr_off = bpf_frame_size;
+	bpf_frame_size += BPF_PPC_STACK_SAVE;
 
 	/* Padding to align stack frame, if any */
 	bpf_frame_size = round_up(bpf_frame_size, SZL * 2);
@@ -856,8 +899,8 @@ static int __arch_prepare_bpf_trampoline(struct bpf_tramp_image *im, void *rw_im
 	EMIT(PPC_RAW_STL(_R3, _R1, nregs_off));
 
 	/* Save nv regs */
-	EMIT(PPC_RAW_STL(_R25, _R1, nvr_off));
-	EMIT(PPC_RAW_STL(_R26, _R1, nvr_off + SZL));
+	EMIT(PPC_RAW_STL(_R26, _R1, nvr_off));
+	EMIT(PPC_RAW_STL(_R27, _R1, nvr_off + SZL));
 
 	if (flags & BPF_TRAMP_F_CALL_ORIG) {
 		PPC_LI_ADDR(_R3, (unsigned long)im);
@@ -896,7 +939,8 @@ static int __arch_prepare_bpf_trampoline(struct bpf_tramp_image *im, void *rw_im
 
 		/* Replicate tail_call_cnt before calling the original BPF prog */
 		if (flags & BPF_TRAMP_F_TAIL_CALL_CTX)
-			bpf_trampoline_setup_tail_call_cnt(image, ctx, func_frame_offset, r4_off);
+			bpf_trampoline_setup_tail_call_info(image, ctx, func_frame_offset,
+							   bpf_dummy_frame_size, r4_off);
 
 		/* Restore args */
 		bpf_trampoline_restore_args_stack(image, ctx, func_frame_offset, nr_regs, regs_off);
@@ -957,8 +1001,8 @@ static int __arch_prepare_bpf_trampoline(struct bpf_tramp_image *im, void *rw_im
 		EMIT(PPC_RAW_LL(_R3, _R1, retval_off));
 
 	/* Restore nv regs */
-	EMIT(PPC_RAW_LL(_R26, _R1, nvr_off + SZL));
-	EMIT(PPC_RAW_LL(_R25, _R1, nvr_off));
+	EMIT(PPC_RAW_LL(_R27, _R1, nvr_off + SZL));
+	EMIT(PPC_RAW_LL(_R26, _R1, nvr_off));
 
 	/* Epilogue */
 	if (IS_ENABLED(CONFIG_PPC64_ELF_ABI_V2) && !IS_ENABLED(CONFIG_PPC_KERNEL_PCREL))
