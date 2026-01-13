@@ -78,6 +78,12 @@ ifdef CONFIG_BUILDTIME_TABLE_SORT
 vmlinux.unstripped: scripts/sorttable
 endif
 
+ifdef CONFIG_MODULE_HASHES
+vmlinux.unstripped: $(objtree)/scripts/modules-merkle-tree
+vmlinux.unstripped: modules.order
+vmlinux.unstripped: $(wildcard include/config/MODULE_INSTALL_STRIP)
+endif
+
 # vmlinux
 # ---------------------------------------------------------------------------
 

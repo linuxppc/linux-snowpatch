@@ -18,6 +18,7 @@ enum pkey_id_type {
 	PKEY_ID_PGP,		/* OpenPGP generated key ID */
 	PKEY_ID_X509,		/* X.509 arbitrary subjectKeyIdentifier */
 	PKEY_ID_PKCS7,		/* Signature in PKCS#7 message */
+	PKEY_ID_MERKLE,		/* Merkle proof for modules */
 };
 
 /*
@@ -40,7 +41,7 @@ struct module_signature {
 	__be32	sig_len;	/* Length of signature data */
 };
 
-int mod_check_sig(const struct module_signature *ms, size_t file_len,
-		  const char *name);
+int mod_split_sig(const void *buf, size_t *buf_len, bool mangled,
+		  enum pkey_id_type *sig_type, size_t *sig_len, const u8 **sig, const char *name);
 
 #endif /* _LINUX_MODULE_SIGNATURE_H */

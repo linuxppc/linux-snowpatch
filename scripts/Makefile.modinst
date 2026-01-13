@@ -8,6 +8,7 @@ __modinst:
 
 include $(objtree)/include/config/auto.conf
 include $(srctree)/scripts/Kbuild.include
+include $(srctree)/scripts/Makefile.lib
 
 install-y :=
 
@@ -36,7 +37,7 @@ install-y += $(addprefix $(MODLIB)/, modules.builtin modules.builtin.modinfo)
 install-$(CONFIG_BUILTIN_MODULE_RANGES) += $(MODLIB)/modules.builtin.ranges
 
 $(addprefix $(MODLIB)/, modules.builtin modules.builtin.modinfo modules.builtin.ranges): $(MODLIB)/%: % FORCE
-	$(call cmd,install)
+	$(call cmd,install_mod)
 
 endif
 
@@ -65,34 +66,12 @@ install-$(CONFIG_MODULES) += $(modules)
 __modinst: $(install-y)
 	@:
 
-#
-# Installation
-#
-quiet_cmd_install = INSTALL $@
-      cmd_install = cp $< $@
-
-# Strip
-#
-# INSTALL_MOD_STRIP, if defined, will cause modules to be stripped after they
-# are installed. If INSTALL_MOD_STRIP is '1', then the default option
-# --strip-debug will be used. Otherwise, INSTALL_MOD_STRIP value will be used
-# as the options to the strip command.
-ifdef INSTALL_MOD_STRIP
-
-ifeq ($(INSTALL_MOD_STRIP),1)
-strip-option := --strip-debug
-else
-strip-option := $(INSTALL_MOD_STRIP)
+ifdef CONFIG_MODULE_HASHES
+ifeq ($(KBUILD_EXTMOD),)
+ifneq ($(INSTALL_MOD_STRIP),$(CONFIG_MODULE_INSTALL_STRIP))
+$(error Inconsistent values for INSTALL_MOD_STRIP between build and installation)
 endif
-
-quiet_cmd_strip = STRIP   $@
-      cmd_strip = $(STRIP) $(strip-option) $@
-
-else
-
-quiet_cmd_strip =
-      cmd_strip = :
-
+endif
 endif
 
 #
@@ -116,12 +95,19 @@ quiet_cmd_sign :=
       cmd_sign := :
 endif
 
+ifeq ($(KBUILD_EXTMOD),)
+ifdef CONFIG_MODULE_HASHES
+quiet_cmd_sign = MERKLE [M] $@
+      cmd_sign = cat $(objtree)/$*.merkle >> $@
+endif
+endif
+
 # Create necessary directories
 $(foreach dir, $(sort $(dir $(install-y))), $(shell mkdir -p $(dir)))
 
 $(dst)/%.ko: %.ko FORCE
-	$(call cmd,install)
-	$(call cmd,strip)
+	$(call cmd,install_mod)
+	$(call cmd,strip_mod)
 	$(call cmd,sign)
 
 ifdef CONFIG_MODULES

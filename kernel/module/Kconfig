@@ -270,9 +270,12 @@ config MODULE_SIG
 	  debuginfo strip done by some packagers (such as rpmbuild) and
 	  inclusion into an initramfs that wants the module size reduced.
 
+config MODULE_SIG_POLICY
+	def_bool MODULE_SIG || MODULE_HASHES
+
 config MODULE_SIG_FORCE
 	bool "Require modules to be validly signed"
-	depends on MODULE_SIG
+	depends on MODULE_SIG_POLICY
 	help
 	  Reject unsigned modules or signed modules for which we don't have a
 	  key.  Without this, such modules will simply taint the kernel.
@@ -286,7 +289,7 @@ config MODULE_SIG_ALL
 	  modules must be signed manually, using the scripts/sign-file tool.
 
 comment "Do not forget to sign required modules with scripts/sign-file"
-	depends on MODULE_SIG_FORCE && !MODULE_SIG_ALL
+	depends on MODULE_SIG_FORCE && !MODULE_SIG_ALL && !MODULE_HASHES
 
 choice
 	prompt "Hash algorithm to sign modules"
@@ -404,6 +407,28 @@ config MODULE_DECOMPRESS
 	  load pinning security policy is enabled.
 
 	  If unsure, say N.
+
+config MODULE_HASHES
+	bool "Module hash validation"
+	depends on !MODULE_SIG_ALL
+	depends on !IMA_APPRAISE_MODSIG
+	select MODULE_SIG_FORMAT
+	select CRYPTO_LIB_SHA256
+	help
+	  Validate modules by their hashes.
+	  Only modules built together with the main kernel image can be
+	  validated that way.
+
+	  This is a reproducible-build compatible alternative to a build-time
+	  generated module keyring, as enabled by
+	  CONFIG_MODULE_SIG_KEY=certs/signing_key.pem.
+
+	  Also see the warning in MODULE_SIG about stripping modules.
+
+# To validate the consistency of INSTALL_MOD_STRIP for MODULE_HASHES
+config MODULE_INSTALL_STRIP
+	string
+	default "$(INSTALL_MOD_STRIP)"
 
 config MODULE_ALLOW_MISSING_NAMESPACE_IMPORTS
 	bool "Allow loading of modules with missing namespace imports"
