@@ -35,6 +35,12 @@ void account_idle_time_irq(void)
 			this_cpu_add(mt_cycles[i], cycles_new[i] - idle->mt_cycles_enter[i]);
 	}
 
+	WRITE_ONCE(idle->idle_count, READ_ONCE(idle->idle_count) + 1);
+
+	/* Dyntick idle time accounted by nohz/scheduler */
+	if (idle->idle_dyntick)
+		return;
+
 	idle_time = lc->int_clock - idle->clock_idle_enter;
 
 	lc->steal_timer += idle->clock_idle_enter - lc->last_update_clock;
@@ -45,7 +51,6 @@ void account_idle_time_irq(void)
 
 	/* Account time spent with enabled wait psw loaded as idle time. */
 	WRITE_ONCE(idle->idle_time, READ_ONCE(idle->idle_time) + idle_time);
-	WRITE_ONCE(idle->idle_count, READ_ONCE(idle->idle_count) + 1);
 	account_idle_time(cputime_to_nsecs(idle_time));
 }
 
@@ -61,8 +66,10 @@ void noinstr arch_cpu_idle(void)
 	set_cpu_flag(CIF_ENABLED_WAIT);
 	if (smp_cpu_mtid)
 		stcctm(MT_DIAG, smp_cpu_mtid, (u64 *)&idle->mt_cycles_enter);
-	idle->clock_idle_enter = get_tod_clock_fast();
-	idle->timer_idle_enter = get_cpu_timer();
+	if (!idle->idle_dyntick) {
+		idle->clock_idle_enter = get_tod_clock_fast();
+		idle->timer_idle_enter = get_cpu_timer();
+	}
 	bpon();
 	__load_psw_mask(psw_mask);
 }

@@ -260,6 +260,12 @@ static void do_idle(void)
 {
 	int cpu = smp_processor_id();
 
+	if (cpu_is_offline(cpu)) {
+		local_irq_disable();
+		cpuhp_report_idle_dead();
+		arch_cpu_idle_dead();
+	}
+
 	/*
 	 * Check if we need to update blocked load
 	 */
@@ -310,11 +316,6 @@ static void do_idle(void)
 		 *   again to reprogram the tick.
 		 */
 		local_irq_disable();
-
-		if (cpu_is_offline(cpu)) {
-			cpuhp_report_idle_dead();
-			arch_cpu_idle_dead();
-		}
 
 		arch_cpu_idle_enter();
 		rcu_nocb_flush_deferred_wakeup();
