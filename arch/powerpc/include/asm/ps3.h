@@ -65,6 +65,7 @@ struct ps3_dma_region_ops;
 
 /**
  * struct ps3_dma_region - A per device dma state variables structure
+ * @dev: The device that this struct describes.
  * @did: The HV device id.
  * @page_size: The ioc pagesize.
  * @region_type: The HV region type.
@@ -108,18 +109,19 @@ struct ps3_dma_region_ops {
 		     dma_addr_t bus_addr,
 		     unsigned long len);
 };
-/**
+
+struct ps3_system_bus_device;
+
+/*
  * struct ps3_dma_region_init - Helper to initialize structure variables
  *
  * Helper to properly initialize variables prior to calling
  * ps3_system_bus_device_register.
  */
-
-struct ps3_system_bus_device;
-
 int ps3_dma_region_init(struct ps3_system_bus_device *dev,
 	struct ps3_dma_region *r, enum ps3_dma_page_size page_size,
 	enum ps3_dma_region_type region_type, void *addr, unsigned long len);
+
 int ps3_dma_region_create(struct ps3_dma_region *r);
 int ps3_dma_region_free(struct ps3_dma_region *r);
 int ps3_dma_map(struct ps3_dma_region *r, unsigned long virt_addr,
@@ -136,7 +138,7 @@ enum ps3_mmio_page_size {
 };
 
 struct ps3_mmio_region_ops;
-/**
+/*
  * struct ps3_mmio_region - a per device mmio state variables structure
  *
  * Current systems can be supported with a single region per device.
@@ -155,13 +157,13 @@ struct ps3_mmio_region_ops {
 	int (*create)(struct ps3_mmio_region *);
 	int (*free)(struct ps3_mmio_region *);
 };
-/**
- * struct ps3_mmio_region_init - Helper to initialize structure variables
+
+/*
+ * ps3_mmio_region_init - Helper to initialize structure variables
  *
  * Helper to properly initialize variables prior to calling
  * ps3_system_bus_device_register.
  */
-
 int ps3_mmio_region_init(struct ps3_system_bus_device *dev,
 	struct ps3_mmio_region *r, unsigned long bus_addr, unsigned long len,
 	enum ps3_mmio_page_size page_size);
@@ -342,7 +344,7 @@ enum ps3_system_bus_device_type {
 	PS3_DEVICE_TYPE_LPM,
 };
 
-/**
+/*
  * struct ps3_system_bus_device - a device on the system bus
  */
 
@@ -371,7 +373,7 @@ struct ps3_system_bus_device {
 int ps3_open_hv_device(struct ps3_system_bus_device *dev);
 int ps3_close_hv_device(struct ps3_system_bus_device *dev);
 
-/**
+/*
  * struct ps3_system_bus_driver - a driver for a device on the system bus
  */
 
@@ -405,7 +407,7 @@ static inline struct ps3_system_bus_driver *
 }
 
 /**
- * ps3_system_bus_set_drvdata -
+ * ps3_system_bus_set_drvdata - save driver private pointer in @dev
  * @dev: device structure
  * @data: Data to set
  */
@@ -464,7 +466,7 @@ enum ps3_lpm_rights {
  * enum ps3_lpm_tb_type - Type of trace buffer lv1 should use.
  *
  * @PS3_LPM_TB_TYPE_NONE: Do not use a trace buffer.
- * @PS3_LPM_RIGHTS_USE_TB: Use the lv1 internal trace buffer.  Must have
+ * @PS3_LPM_TB_TYPE_INTERNAL: Use the lv1 internal trace buffer.  Must have
  *  rights @PS3_LPM_RIGHTS_USE_TB.
  */
 
