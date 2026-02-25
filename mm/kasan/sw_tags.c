@@ -40,6 +40,10 @@ void __init kasan_init_sw_tags(void)
 {
 	int cpu;
 
+	/* If KASAN is disabled via command line, don't initialize it. */
+	if (kasan_arg_disabled)
+		return;
+
 	for_each_possible_cpu(cpu)
 		per_cpu(prng_state, cpu) = (u32)get_cycles();
 
@@ -78,6 +82,9 @@ bool kasan_check_range(const void *addr, size_t size, bool write,
 	u8 tag;
 	u8 *shadow_first, *shadow_last, *shadow;
 	void *untagged_addr;
+
+	if (!kasan_enabled())
+		return true;
 
 	if (unlikely(size == 0))
 		return true;
