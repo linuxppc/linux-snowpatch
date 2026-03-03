@@ -145,6 +145,10 @@ int arch_crash_hotplug_support(struct kimage *image, unsigned long kexec_flags);
 
 unsigned int arch_crash_get_elfcorehdr_size(void);
 #define crash_get_elfcorehdr_size arch_crash_get_elfcorehdr_size
+
+int machine_kexec_post_load(struct kimage *image);
+#define machine_kexec_post_load machine_kexec_post_load
+
 #endif /* CONFIG_CRASH_HOTPLUG */
 
 extern int crashing_cpu;
@@ -159,6 +163,8 @@ extern void default_machine_crash_shutdown(struct pt_regs *regs);
 extern void crash_kexec_prepare(void);
 extern void crash_kexec_secondary(struct pt_regs *regs);
 
+extern void sync_backup_region_phdr(struct kimage *image, Elf64_Ehdr *ehdr,
+				    bool phdr_to_kimage);
 static inline bool kdump_in_progress(void)
 {
 	return crashing_cpu >= 0;
