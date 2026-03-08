@@ -45,7 +45,7 @@ static struct coproc_dev {
 	struct device *device;
 	char *name;
 	dev_t devt;
-	struct class *class;
+	const struct class *class;
 	enum vas_cop_type cop_type;
 	const struct vas_user_win_ops *vops;
 } coproc_device;
@@ -599,6 +599,21 @@ static struct file_operations coproc_fops = {
 	.unlocked_ioctl = coproc_ioctl,
 };
 
+static const struct class nx_gzip_class = {
+	.name		= "nx-gzip",
+	.devnode	= coproc_devnode
+};
+
+static const struct class* cop_to_class(enum vas_cop_type cop)
+{
+	switch (cop) {
+	case VAS_COP_TYPE_GZIP:		return &nx_gzip_class;
+	default:
+		pr_err("No device class defined for cop type %d\n", cop);
+		return NULL;
+	}
+}
+
 /*
  * Supporting only nx-gzip coprocessor type now, but this API code
  * extended to other coprocessor types later.
@@ -609,6 +624,10 @@ int vas_register_coproc_api(struct module *mod, enum vas_cop_type cop_type,
 {
 	int rc = -EINVAL;
 	dev_t devno;
+	const struct class* class = cop_to_class(cop_type);
+
+	if (!class)
+		return rc;
 
 	rc = alloc_chrdev_region(&coproc_device.devt, 1, 1, name);
 	if (rc) {
@@ -619,13 +638,12 @@ int vas_register_coproc_api(struct module *mod, enum vas_cop_type cop_type,
 	pr_devel("%s device allocated, dev [%i,%i]\n", name,
 			MAJOR(coproc_device.devt), MINOR(coproc_device.devt));
 
-	coproc_device.class = class_create(name);
-	if (IS_ERR(coproc_device.class)) {
-		rc = PTR_ERR(coproc_device.class);
-		pr_err("Unable to create %s class %d\n", name, rc);
+	rc = class_register(class);
+	if (rc) {
+		pr_err("Unable to register %s class %d\n", name, rc);
 		goto err_class;
 	}
-	coproc_device.class->devnode = coproc_devnode;
+	coproc_device.class = class;
 	coproc_device.cop_type = cop_type;
 	coproc_device.vops = vops;
 
@@ -654,7 +672,7 @@ int vas_register_coproc_api(struct module *mod, enum vas_cop_type cop_type,
 err:
 	cdev_del(&coproc_device.cdev);
 err_cdev:
-	class_destroy(coproc_device.class);
+	class_unregister(coproc_device.class);
 err_class:
 	unregister_chrdev_region(coproc_device.devt, 1);
 	return rc;
@@ -668,6 +686,6 @@ void vas_unregister_coproc_api(void)
 	devno = MKDEV(MAJOR(coproc_device.devt), 0);
 	device_destroy(coproc_device.class, devno);
 
-	class_destroy(coproc_device.class);
+	class_unregister(coproc_device.class);
 	unregister_chrdev_region(coproc_device.devt, 1);
 }
