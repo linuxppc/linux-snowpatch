@@ -391,6 +391,10 @@ vdso_prepare: prepare0
 		$(build)=arch/powerpc/kernel/vdso include/generated/vdso64-offsets.h)
 endif
 
+vdso-install-$(CONFIG_PPC32)	+= arch/powerpc/kernel/vdso/vdso32.so.dbg
+vdso-install-$(CONFIG_PPC64)	+= arch/powerpc/kernel/vdso/vdso64.so.dbg
+vdso-install-$(CONFIG_COMPAT)	+= arch/powerpc/kernel/vdso/vdso32.so.dbg
+
 archprepare: checkbin
 
 archheaders:
