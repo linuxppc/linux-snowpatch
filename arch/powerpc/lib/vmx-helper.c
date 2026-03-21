@@ -52,7 +52,7 @@ int exit_vmx_usercopy(void)
 }
 EXPORT_SYMBOL(exit_vmx_usercopy);
 
-int enter_vmx_ops(void)
+int __no_sanitize_address enter_vmx_ops(void)
 {
 	if (in_interrupt())
 		return 0;
@@ -69,7 +69,7 @@ int enter_vmx_ops(void)
  * passed a pointer to the destination which we return as required by a
  * memcpy implementation.
  */
-void *exit_vmx_ops(void *dest)
+void __no_sanitize_address *exit_vmx_ops(void *dest)
 {
 	disable_kernel_altivec();
 	preempt_enable();
