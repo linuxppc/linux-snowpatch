@@ -548,11 +548,10 @@ static void xive_dec_target_count(int cpu)
 static int xive_find_target_in_mask(const struct cpumask *mask,
 				    unsigned int fuzz)
 {
-	int cpu, first, num, i;
+	int cpu, first, i;
 
-	/* Pick up a starting point CPU in the mask based on  fuzz */
-	num = min_t(int, cpumask_weight(mask), nr_cpu_ids);
-	first = fuzz % num;
+	/* Pick up a starting point CPU in the mask based on fuzz */
+	first = fuzz % cpumask_weight(mask);
 
 	/* Locate it */
 	cpu = cpumask_first(mask);
@@ -577,10 +576,7 @@ static int xive_find_target_in_mask(const struct cpumask *mask,
 		 */
 		if (cpu_online(cpu) && xive_try_pick_target(cpu))
 			return cpu;
-		cpu = cpumask_next(cpu, mask);
-		/* Wrap around */
-		if (cpu >= nr_cpu_ids)
-			cpu = cpumask_first(mask);
+		cpu = cpumask_next_wrap(cpu, mask);
 	} while (cpu != first);
 
 	return -1;
