@@ -437,6 +437,10 @@ static int ppc_rtas_find_all_sensors(void)
 	}
 
 	sensors.quant = len / 8;      /* int + int */
+	if (sensors.quant > ARRAY_SIZE(sensors.sensor)) {
+		pr_err("too many sensors reported: %u\n", sensors.quant);
+		return 1;
+	}
 
 	for (i=0; i<sensors.quant; i++) {
 		sensors.sensor[i].token = *utmp++;
