@@ -190,33 +190,34 @@ static int hvpipe_rtas_recv_msg(char __user *buf, int size)
 		return -ENOMEM;
 	}
 
-	ret = rtas_ibm_receive_hvpipe_msg(work_area, &srcID,
-					&bytes_written);
-	if (!ret) {
-		/*
-		 * Recv HVPIPE RTAS is successful.
-		 * When releasing FD or no one is waiting on the
-		 * specific source, issue recv HVPIPE RTAS call
-		 * so that pipe is not blocked - this func is called
-		 * with NULL buf.
-		 */
-		if (buf) {
-			if (size < bytes_written) {
-				pr_err("Received the payload size = %d, but the buffer size = %d\n",
-					bytes_written, size);
-				bytes_written = size;
-			}
-			ret = copy_to_user(buf,
-					rtas_work_area_raw_buf(work_area),
-					bytes_written);
-			if (!ret)
-				ret = bytes_written;
-		}
-	} else {
-		pr_err("ibm,receive-hvpipe-msg failed with %d\n",
-				ret);
+	/*
+	 * Recv HVPIPE RTAS is successful.
+	 * When releasing FD or no one is waiting on the
+	 * specific source, issue recv HVPIPE RTAS call
+	 * so that pipe is not blocked - this func is called
+	 * with NULL buf.
+	 */
+	ret = rtas_ibm_receive_hvpipe_msg(work_area, &srcID, &bytes_written);
+	if (ret) {
+		pr_err("ibm,receive-hvpipe-msg failed with %d\n", ret);
+		goto out;
 	}
 
+	if (!buf)
+		goto out;
+
+	if (size < bytes_written) {
+		pr_err("Received the payload size = %d, but the buffer size = %d\n",
+				bytes_written, size);
+		bytes_written = size;
+	}
+
+	if (copy_to_user(buf, rtas_work_area_raw_buf(work_area), bytes_written))
+		ret = -EFAULT;
+	else
+		ret = bytes_written;
+
+out:
 	rtas_work_area_free(work_area);
 	return ret;
 }
@@ -376,7 +377,7 @@ static ssize_t papr_hvpipe_handle_read(struct file *file,
 
 	ret = copy_to_user(buf, &hdr, HVPIPE_HDR_LEN);
 	if (ret)
-		return ret;
+		return -EFAULT;
 
 	/*
 	 * Message event has payload, so get the payload with
@@ -454,6 +455,7 @@ static int papr_hvpipe_handle_release(struct inode *inode,
 	src_info = file->private_data;
 	list_del(&src_info->list);
 	file->private_data = NULL;
+	spin_unlock(&hvpipe_src_list_lock);
 	/*
 	 * If the pipe for this specific source has any pending
 	 * payload, issue recv HVPIPE RTAS so that pipe will not
@@ -461,10 +463,8 @@ static int papr_hvpipe_handle_release(struct inode *inode,
 	 */
 	if (src_info->hvpipe_status & HVPIPE_MSG_AVAILABLE) {
 		src_info->hvpipe_status = 0;
-		spin_unlock(&hvpipe_src_list_lock);
 		hvpipe_rtas_recv_msg(NULL, 0);
-	} else
-		spin_unlock(&hvpipe_src_list_lock);
+	}
 
 	kfree(src_info);
 	return 0;
@@ -479,50 +479,43 @@ static const struct file_operations papr_hvpipe_handle_ops = {
 
 static int papr_hvpipe_dev_create_handle(u32 srcID)
 {
-	struct hvpipe_source_info *src_info __free(kfree) = NULL;
-
-	spin_lock(&hvpipe_src_list_lock);
-	/*
-	 * Do not allow more than one process communicates with
-	 * each source.
-	 */
-	src_info = hvpipe_find_source(srcID);
-	if (src_info) {
-		spin_unlock(&hvpipe_src_list_lock);
-		pr_err("pid(%d) is already using the source(%d)\n",
-				src_info->tsk->pid, srcID);
-		return -EALREADY;
-	}
-	spin_unlock(&hvpipe_src_list_lock);
+	struct hvpipe_source_info *src_info;
+	int fd;
 
 	src_info = kzalloc_obj(*src_info, GFP_KERNEL_ACCOUNT);
 	if (!src_info)
 		return -ENOMEM;
 
 	src_info->srcID = srcID;
-	src_info->tsk = current;
 	init_waitqueue_head(&src_info->recv_wqh);
 
-	FD_PREPARE(fdf, O_RDONLY | O_CLOEXEC,
-		   anon_inode_getfile("[papr-hvpipe]", &papr_hvpipe_handle_ops,
-				      (void *)src_info, O_RDWR));
-	if (fdf.err)
-		return fdf.err;
-
-	retain_and_null_ptr(src_info);
-	spin_lock(&hvpipe_src_list_lock);
 	/*
-	 * If two processes are executing ioctl() for the same
-	 * source ID concurrently, prevent the second process to
-	 * acquire FD.
+	 * Do not allow more than one process communicates with
+	 * each source.
 	 */
-	if (hvpipe_find_source(srcID)) {
+	spin_lock(&hvpipe_src_list_lock);
+	if(hvpipe_find_source(srcID)) {
 		spin_unlock(&hvpipe_src_list_lock);
+		pr_err("pid(%s:%d) could not get the source(%d)\n",
+				current->comm, task_pid_nr(current), srcID);
+		kfree(src_info);
 		return -EALREADY;
 	}
 	list_add(&src_info->list, &hvpipe_src_list);
 	spin_unlock(&hvpipe_src_list_lock);
-	return fd_publish(fdf);
+
+	fd = FD_ADD(O_RDONLY | O_CLOEXEC,
+		   anon_inode_getfile("[papr-hvpipe]", &papr_hvpipe_handle_ops,
+				      (void *)src_info, O_RDWR));
+	if (fd < 0) {
+		spin_lock(&hvpipe_src_list_lock);
+		list_del(&src_info->list);
+		spin_unlock(&hvpipe_src_list_lock);
+		kfree(src_info);
+		return fd;
+	}
+
+	return fd;
 }
 
 /*
@@ -775,23 +768,27 @@ static int __init papr_hvpipe_init(void)
 	}
 
 	ret = enable_hvpipe_IRQ();
-	if (!ret) {
-		ret = set_hvpipe_sys_param(1);
-		if (!ret)
-			ret = misc_register(&papr_hvpipe_dev);
-	}
+	if (ret)
+		goto out_wq;
 
-	if (!ret) {
-		pr_info("hvpipe feature is enabled\n");
-		hvpipe_feature = true;
-		return 0;
-	}
+	ret = set_hvpipe_sys_param(1);
+	if (ret)
+		goto out_wq;
 
-	pr_err("hvpipe feature is not enabled %d\n", ret);
+	ret = misc_register(&papr_hvpipe_dev);
+	if (ret)
+		goto out_wq;
+
+	pr_info("hvpipe feature is enabled\n");
+	hvpipe_feature = true;
+	return 0;
+
+out_wq:
 	destroy_workqueue(papr_hvpipe_wq);
 out:
 	kfree(papr_hvpipe_work);
 	papr_hvpipe_work = NULL;
+	pr_err("hvpipe feature is not enabled %d\n", ret);
 	return ret;
 }
 machine_device_initcall(pseries, papr_hvpipe_init);
