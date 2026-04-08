@@ -428,7 +428,6 @@ define_all_pci_vendors! {
     TRANSMETA                = bindings::PCI_VENDOR_ID_TRANSMETA,                // 0x1279
     ROCKWELL                 = bindings::PCI_VENDOR_ID_ROCKWELL,                 // 0x127A
     ITE                      = bindings::PCI_VENDOR_ID_ITE,                      // 0x1283
-    ALTEON                   = bindings::PCI_VENDOR_ID_ALTEON,                   // 0x12ae
     NVIDIA_SGS               = bindings::PCI_VENDOR_ID_NVIDIA_SGS,               // 0x12d2
     PERICOM                  = bindings::PCI_VENDOR_ID_PERICOM,                  // 0x12D8
     AUREAL                   = bindings::PCI_VENDOR_ID_AUREAL,                   // 0x12eb
