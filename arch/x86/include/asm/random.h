@@ -1,0 +1,16 @@
+/* SPDX-License-Identifier: GPL-2.0 */
+#ifndef _ASM_X86_RANDOM_H
+#define _ASM_X86_RANDOM_H
+
+#include <asm/processor.h>
+#include <asm/tsc.h>
+
+static inline unsigned long random_get_entropy(void)
+{
+	if (!IS_ENABLED(CONFIG_X86_TSC) &&
+	    !cpu_feature_enabled(X86_FEATURE_TSC))
+		return random_get_entropy_fallback();
+	return rdtsc();
+}
+
+#endif /* _ASM_X86_RANDOM_H */

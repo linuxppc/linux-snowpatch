@@ -177,10 +177,6 @@ static inline void local_tick_enable(unsigned long comp)
 	set_clock_comparator(get_lowcore()->clock_comparator);
 }
 
-#define CLOCK_TICK_RATE		1193180 /* Underlying HZ */
-
-typedef unsigned long cycles_t;
-
 static __always_inline unsigned long get_tod_clock(void)
 {
 	union tod_clock clk;
@@ -222,12 +218,6 @@ static inline unsigned long get_tod_clock_monotonic(void)
 	preempt_enable_notrace();
 	return tod;
 }
-
-static inline cycles_t get_cycles(void)
-{
-	return (cycles_t)get_tod_clock_monotonic() >> 2;
-}
-#define get_cycles get_cycles
 
 /**
  * tod_to_ns - convert a TOD format value to nanoseconds

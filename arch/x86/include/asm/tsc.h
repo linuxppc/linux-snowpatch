@@ -67,21 +67,10 @@ static __always_inline u64 rdtsc_ordered(void)
 /*
  * Standard way to access the cycle counter.
  */
-typedef unsigned long long cycles_t;
-
 extern unsigned int cpu_khz;
 extern unsigned int tsc_khz;
 
 extern void disable_TSC(void);
-
-static inline cycles_t get_cycles(void)
-{
-	if (!IS_ENABLED(CONFIG_X86_TSC) &&
-	    !cpu_feature_enabled(X86_FEATURE_TSC))
-		return 0;
-	return rdtsc();
-}
-#define get_cycles get_cycles
 
 extern void tsc_early_init(void);
 extern void tsc_init(void);
