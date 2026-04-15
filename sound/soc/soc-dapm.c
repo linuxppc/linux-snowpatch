@@ -2897,20 +2897,9 @@ static struct snd_soc_dapm_widget *dapm_find_widget(
 {
 	struct snd_soc_dapm_widget *w;
 	struct snd_soc_dapm_widget *fallback = NULL;
-	char prefixed_pin[80];
-	const char *pin_name;
-	const char *prefix = dapm_prefix(dapm);
-
-	if (prefix) {
-		snprintf(prefixed_pin, sizeof(prefixed_pin), "%s %s",
-			 prefix, pin);
-		pin_name = prefixed_pin;
-	} else {
-		pin_name = pin;
-	}
 
 	for_each_card_widgets(dapm->card, w) {
-		if (!strcmp(w->name, pin_name)) {
+		if (!snd_soc_dapm_widget_name_cmp(w, pin)) {
 			if (w->dapm == dapm)
 				return w;
 			else
@@ -4593,6 +4582,36 @@ void snd_soc_dapm_connect_dai_link_widgets(struct snd_soc_card *card)
 			dapm_connect_dai_pair(card, rtd, codec_dai, cpu_dai);
 		}
 	}
+}
+
+int snd_soc_dapm_ignore_suspend_widgets(struct snd_soc_card *card)
+{
+	struct snd_soc_dapm_widget *w;
+	int i;
+
+	for (i = 0; i < card->num_ignore_suspend_widgets; i++) {
+		w = dapm_find_widget(snd_soc_card_to_dapm(card),
+				     card->ignore_suspend_widgets[i], true);
+		if (!w) {
+			dev_err(card->dev, "ASoC: DAPM unknown ignore suspend widget %s\n",
+				card->ignore_suspend_widgets[i]);
+			return -EINVAL;
+		}
+		w->ignore_suspend = 1;
+	}
+
+	for (i = 0; i < card->num_of_ignore_suspend_widgets; i++) {
+		w = dapm_find_widget(snd_soc_card_to_dapm(card),
+				     card->of_ignore_suspend_widgets[i], true);
+		if (!w) {
+			dev_err(card->dev, "ASoC: DAPM unknown ignore suspend widget %s\n",
+				card->of_ignore_suspend_widgets[i]);
+			return -EINVAL;
+		}
+		w->ignore_suspend = 1;
+	}
+
+	return 0;
 }
 
 static void dapm_stream_event(struct snd_soc_pcm_runtime *rtd, int stream, int event)
