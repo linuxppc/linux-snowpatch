@@ -30,12 +30,14 @@
 *.gz
 *.i
 *.ko
+*.ko.stripped
 *.lex.c
 *.ll
 *.lst
 *.lz4
 *.lzma
 *.lzo
+*.merkle
 *.mod
 *.mod.c
 *.o

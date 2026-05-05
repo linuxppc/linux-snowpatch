@@ -64,11 +64,11 @@ struct load_info {
 	/* pointer to module in temporary copy, freed at end of load_module() */
 	struct module *mod;
 	Elf_Ehdr *hdr;
-	unsigned long len;
+	size_t len;
 	Elf_Shdr *sechdrs;
 	char *secstrings, *strtab;
 	unsigned long symoffs, stroffs, init_typeoffs, core_typeoffs;
-	bool sig_ok;
+	bool auth_ok;
 #ifdef CONFIG_KALLSYMS
 	unsigned long mod_kallsyms_init_off;
 #endif
@@ -117,7 +117,6 @@ struct module_use {
 	struct module *source, *target;
 };
 
-int mod_verify_sig(const void *mod, struct load_info *info);
 int try_to_force_load(struct module *mod, const char *reason);
 bool find_symbol(struct find_symbol_arg *fsa);
 struct module *find_module_all(const char *name, size_t len, bool even_unformed);
@@ -336,14 +335,17 @@ int module_enforce_rwx_sections(const Elf_Ehdr *hdr, const Elf_Shdr *sechdrs,
 void module_mark_ro_after_init(const Elf_Ehdr *hdr, Elf_Shdr *sechdrs,
 			       const char *secstrings);
 
-#ifdef CONFIG_MODULE_SIG
-int module_sig_check(struct load_info *info, int flags);
-#else /* !CONFIG_MODULE_SIG */
-static inline int module_sig_check(struct load_info *info, int flags)
+int module_sig_check(const void *mod, size_t mod_len, const void *sig, size_t sig_len);
+int module_hash_check(const void *mod, size_t mod_len, const void *sig, size_t sig_len);
+
+#ifdef CONFIG_MODULE_AUTH
+int module_auth_check(struct load_info *info, int flags);
+#else /* !CONFIG_MODULE_AUTH */
+static inline int module_auth_check(struct load_info *info, int flags)
 {
 	return 0;
 }
-#endif /* !CONFIG_MODULE_SIG */
+#endif /* !CONFIG_MODULE_AUTH */
 
 #ifdef CONFIG_DEBUG_KMEMLEAK
 void kmemleak_load_module(const struct module *mod, const struct load_info *info);
