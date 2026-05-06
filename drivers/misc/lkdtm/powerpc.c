@@ -17,11 +17,14 @@ static void insert_slb_entry(unsigned long p, int ssize, int page_size)
 		     : "r" (mk_vsid_data(p, ssize, flags)),
 		       "r" (mk_esid_data(p, ssize, SLB_NUM_BOLTED))
 		     : "memory");
+	isync();
 
 	asm volatile("slbmte %0,%1" :
 			: "r" (mk_vsid_data(p, ssize, flags)),
 			  "r" (mk_esid_data(p, ssize, SLB_NUM_BOLTED + 1))
 			: "memory");
+	isync();
+
 	preempt_enable();
 }
 
@@ -84,6 +87,7 @@ static void insert_dup_slb_entry_0(void)
 			: "r" (vsid),
 			  "r" (esid | SLB_NUM_BOLTED)
 			: "memory");
+	isync();
 
 	asm volatile("slbmfee  %0,%1" : "=r" (esid) : "r" (i));
 	asm volatile("slbmfev  %0,%1" : "=r" (vsid) : "r" (i));
@@ -93,11 +97,37 @@ static void insert_dup_slb_entry_0(void)
 			: "r" (vsid),
 			  "r" (esid | (SLB_NUM_BOLTED + 1))
 			: "memory");
+	isync();
 
 	pr_info("%s accessing test address 0x%lx: 0x%lx\n",
 		__func__, test_address, *test_ptr);
 
 	preempt_enable();
+}
+
+static void tlbiel_va(unsigned long va,
+		      unsigned long pid,
+		      unsigned long ap,
+		      unsigned long ric)
+{
+	unsigned long rb, rs, prs, r;
+
+	rb = va & ~(PPC_BITMASK(52, 63));
+	rb |= ap << PPC_BITLSHIFT(58);
+	rs = pid << PPC_BITLSHIFT(31);
+
+	prs = 1; /* process scoped */
+	r = 1;   /* radix format */
+
+	/*
+	 * Trigger an MCE by issuing radix tlbiel with an invalid operand combination.
+	 * Using PRS=1 (process-scoped) with kernel address does not correspond to
+	 * any valid process-scoped translation.
+	 * This results in an invalid tlbiel operation, causing hardware to
+	 * raise a machine check.
+	 */
+	asm volatile(PPC_TLBIEL(%0, %4, %3, %2, %1)
+			: : "r"(rb), "i"(r), "i"(prs), "i"(ric), "r"(rs) : "memory");
 }
 
 static void lkdtm_PPC_SLB_MULTIHIT(void)
@@ -119,8 +149,22 @@ static void lkdtm_PPC_SLB_MULTIHIT(void)
 	}
 }
 
+static void lkdtm_PPC_RADIX_TLBIEL(void)
+{
+	unsigned long addr = PAGE_OFFSET;
+
+	if (radix_enabled()) {
+		pr_info("Injecting Radix TLB invalidation MCE\n");
+		tlbiel_va(addr, 0, 0, RIC_FLUSH_ALL);
+		pr_info("Recovered from radix tlbiel attempt\n");
+	} else {
+		pr_err("XFAIL: This test is for ppc64 and with radix mode MMU only\n");
+	}
+}
+
 static struct crashtype crashtypes[] = {
 	CRASHTYPE(PPC_SLB_MULTIHIT),
+	CRASHTYPE(PPC_RADIX_TLBIEL),
 };
 
 struct crashtype_category powerpc_crashtypes = {
