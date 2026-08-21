@@ -23,7 +23,7 @@ int spu_alloc_lscsa(struct spu_state *csa)
 	struct spu_lscsa *lscsa;
 	unsigned char *p;
 
-	lscsa = vzalloc(sizeof(*lscsa));
+	lscsa = __vmalloc(sizeof(*lscsa), GFP_KERNEL_ACCOUNT | __GFP_ZERO);
 	if (!lscsa)
 		return -ENOMEM;
 	csa->lscsa = lscsa;
