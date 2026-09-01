@@ -228,9 +228,10 @@ int ps3_repository_read_boot_dat_info(u64 *lpar_addr, unsigned int *size);
 /* repository spu info */
 
 /**
- * enum spu_resource_type - Type of spu resource.
- * @spu_resource_type_shared: Logical spu is shared with other partions.
- * @spu_resource_type_exclusive: Logical spu is not shared with other partions.
+ * enum ps3_spu_resource_type - Type of spu resource.
+ * @PS3_SPU_RESOURCE_TYPE_SHARED: Logical spu is shared with other partitions.
+ * @PS3_SPU_RESOURCE_TYPE_EXCLUSIVE: Logical spu is not shared with other
+ * partitions.
  *
  * Returned by ps3_repository_read_spu_resource_id().
  */

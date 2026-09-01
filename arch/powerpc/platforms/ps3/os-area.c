@@ -119,6 +119,7 @@ struct os_area_params {
  * @count_32: number of usable 32 bit index entries
  * @index_16: byte offset of the database id index for 16 bit variables.
  * @count_16: number of usable 16 bit index entries
+ * @_db_data: 1000 bytes of shared flash memory database
  *
  * Flash rom storage for exclusive use by guests running in the other os lpar.
  * The current system configuration allocates 1K (two segments) for other os
@@ -139,7 +140,7 @@ struct os_area_db {
 	u8 _db_data[1000];
 };
 
-/**
+/*
  * enum os_area_db_owner - Data owners.
  */
 
@@ -182,7 +183,7 @@ static const struct os_area_db_id os_area_db_id_rtc_diff = {
 
 #define SECONDS_FROM_1970_TO_2000 946684800LL
 
-/**
+/*
  * struct saved_params - Static working copies of data from the PS3 'os area'.
  *
  * The order of preference we use for the rtc_diff source:

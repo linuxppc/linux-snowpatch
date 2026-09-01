@@ -79,7 +79,7 @@ struct mem_region {
 /**
  * struct map - address space state variables holder
  * @total: total memory available as reported by HV
- * @vas_id - HV virtual address space id
+ * @vas_id: HV virtual address space id
  * @htab_size: htab size in bytes
  *
  * The HV virtual address space (vas) allows for hotplug memory regions.
@@ -193,7 +193,7 @@ fail:
 }
 
 /**
- * ps3_mm_vas_destroy -
+ * ps3_mm_vas_destroy - destroy the virtual address space
  *
  * called during kexec sequence with MMU off.
  */
@@ -504,7 +504,7 @@ static int dma_ioc0_free_chunk(struct dma_chunk *c)
  * @r: Pointer to a struct ps3_dma_region.
  * @phys_addr: Starting physical address of the area to map.
  * @len: Length in bytes of the area to map.
- * c_out: A pointer to receive an allocated struct dma_chunk for this area.
+ * @c_out: A pointer to receive an allocated struct dma_chunk for this area.
  *
  * This is the lowest level dma mapping routine, and is the one that will
  * make the HV call to add the pages into the io controller address space.
@@ -699,7 +699,7 @@ static int dma_ioc0_region_create(struct ps3_dma_region *r)
 }
 
 /**
- * dma_region_free - Free a device dma region.
+ * dma_sb_region_free - Free a device dma region.
  * @r: Pointer to a struct ps3_dma_region.
  *
  * This is the lowest level dma region free routine, and is the one that
@@ -1081,7 +1081,7 @@ static int dma_sb_map_area_linear(struct ps3_dma_region *r,
 }
 
 /**
- * dma_unmap_area_linear - Unmap an area of memory from a device dma region.
+ * dma_sb_unmap_area_linear - Unmap an area of memory from a device dma region.
  * @r: Pointer to a struct ps3_dma_region.
  * @bus_addr: The starting ioc bus address of the area to unmap.
  * @len: Length in bytes of the area to unmap.

@@ -18,8 +18,8 @@
 #include "platform.h"
 
 /**
- * enum lpar_vas_id - id of LPAR virtual address space.
- * @lpar_vas_id_current: Current selected virtual address space
+ * enum ps3_lpar_vas_id - id of LPAR virtual address space.
+ * @PS3_LPAR_VAS_ID_CURRENT: Current selected virtual address space
  *
  * Identify the target LPAR address space.
  */
