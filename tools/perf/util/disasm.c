@@ -1201,6 +1201,12 @@ static int dso__disassemble_filename(struct dso *dso, char *filename, size_t fil
 	if (len < 0)
 		goto fallback;
 
+	if (!is_valid_elf(filename)) {
+		pr_warning("build-id cache file is not a valid ELF, falling back to original binary: %s\n",
+			filename);
+		goto fallback;
+	}
+
 	linkname[len] = '\0';
 	if (strstr(linkname, DSO__NAME_KALLSYMS) ||
 		access(filename, R_OK)) {

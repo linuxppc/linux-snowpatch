@@ -76,4 +76,6 @@ extern char buildid_dir[];
 void set_buildid_dir(const char *dir);
 void disable_buildid_cache(void);
 
+bool is_valid_elf(const char *filename);
+
 #endif

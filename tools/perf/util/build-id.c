@@ -43,6 +43,20 @@
 
 static bool no_buildid_cache;
 
+bool is_valid_elf(const char *filename)
+{
+	unsigned char magic[SELFMAG];
+	int fd = open(filename, O_RDONLY);
+	bool valid = false;
+
+	if (fd < 0)
+		return false;
+	if (read(fd, magic, sizeof(magic)) == (ssize_t)sizeof(magic))
+		valid = (memcmp(magic, ELFMAG, SELFMAG) == 0);
+	close(fd);
+	return valid;
+}
+
 static int mark_dso_hit_callback(struct callchain_cursor_node *node, void *data __maybe_unused)
 {
 	struct map *map = node->ms.map;
@@ -670,6 +684,10 @@ build_id_cache__add(const char *sbuild_id, const char *name, const char *realnam
 		if (is_kallsyms) {
 			if (copyfile("/proc/kallsyms", filename))
 				goto out_free;
+		} else if (!is_valid_elf(realname)) {
+			pr_warning("build-id cache: skipping non-ELF file: %s\n",
+				   realname);
+			goto out_free;
 		} else if (nsi && nsinfo__need_setns(nsi)) {
 			if (copyfile_ns(name, filename, nsi))
 				goto out_free;
@@ -860,7 +878,11 @@ static int filename__read_build_id_ns(const char *filename,
 static bool dso__build_id_mismatch(struct dso *dso, const char *name)
 {
 	struct build_id bid = { .size = 0, };
-	bool ret = false;
+	/*
+	 * Default to mismatch: if we cannot read the build-id (e.g. file
+	 * replaced or not an ELF), treat it conservatively as a mismatch.
+	 */
+	bool ret = true;
 
 	mutex_lock(dso__lock(dso));
 	if (filename__read_build_id_ns(name, &bid, dso__nsinfo(dso)) >= 0)
